@@ -7,12 +7,14 @@ import threading
 import time
 import uvicorn
 import base64
+import signal
+import atexit
 from desktop_env.desktop_env import DesktopEnv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Query, responses, HTTPException, status
 from pydantic import BaseModel
 from typing import Any, Dict, List, Union
-from fastapi import responses, Query
-from fastapi import HTTPException
+
+os.environ["OSGYM_ALLOWED_IPS"] = "127.0.0.1"
 
 #  Logger Configs {{{ # 
 logger = logging.getLogger()
@@ -50,8 +52,42 @@ logger.addHandler(sdebug_handler)
 logger = logging.getLogger("desktopenv.main")
 available_vms: List[int] = list(range(2, -1, -1)) # at most 2 VMs for each worker
 active_vms: List[int] = []
-vm_map: Dict[int, Dict[str, Any]] = {}
+vm_map: Dict[str, Dict[str, Any]] = {}
 vm_lock = threading.Lock()
+_cleanup_registered = False
+
+def _cleanup_all_vms():
+    """
+    Cleanup function to release all VMs and close their environments.
+    This is called on server shutdown, errors, or interrupts.
+    """
+    try:
+        logger.info("Starting cleanup of all VMs...")
+        with vm_lock:
+            active_vms_copy = active_vms.copy()
+            for vm_id in active_vms_copy:
+                try:
+                    if str(vm_id) in vm_map and vm_map[str(vm_id)]["env"] is not None:
+                        logger.info(f"Closing environment for VM ID: {vm_id}")
+                        vm_map[str(vm_id)]["env"].close()
+                except Exception as e:
+                    logger.error(f"Error closing VM ID {vm_id} during cleanup: {e}")
+            active_vms.clear()
+            vm_map.clear()
+            available_vms.clear()
+        logger.info("Cleanup of all VMs completed")
+    except Exception as e:
+        logger.error(f"Error during VM cleanup: {e}")
+
+def _signal_handler(signum, frame):
+    """
+    Signal handler for SIGINT (Ctrl+C) and SIGTERM.
+    """
+    signal_name = signal.Signals(signum).name
+    logger.info(f"Received signal {signal_name} ({signum}), initiating cleanup...")
+    _cleanup_all_vms()
+    logger.info("Cleanup completed, exiting...")
+    sys.exit(0)
 
 class ResetRequest(BaseModel):
     task_config: Dict[str, Any]
@@ -66,9 +102,23 @@ class ShutdownRequest(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Register cleanup handlers
+    global _cleanup_registered
+    if not _cleanup_registered:
+        signal.signal(signal.SIGINT, _signal_handler)
+        signal.signal(signal.SIGTERM, _signal_handler)
+        atexit.register(_cleanup_all_vms)
+        _cleanup_registered = True
+        logger.info("Registered cleanup handlers for signals and exit")
+    
     timeout_thread = threading.Thread(target=_check_timeout, daemon=True)
     timeout_thread.start()
-    yield
+    try:
+        yield
+    finally:
+        # Cleanup on shutdown
+        logger.info("Server shutting down, cleaning up all VMs...")
+        _cleanup_all_vms()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -92,7 +142,9 @@ async def reset(request: ResetRequest):
         logger.info(f"Before reset, closing all VMs")
         _release_vm("all")
         vm_id = _get_available_vm(request.timeout)
+        logger.info(f"vm_id: {vm_id}")
         task_config = request.task_config
+        logger.info(f"task_config: {task_config}")
         logger.info(f"Resetting VM ID: {vm_id} with task config: {task_config}")
         obs = await _get_vm_env(vm_id).reset(task_config)
         logger.info(f"Successfully reset, VM ID: {vm_id} with task config: {task_config}")
@@ -120,7 +172,8 @@ async def step(request: StepRequest):
             reward = await vm_env.evaluate()
             _release_vm(vm_id)
         return {
-            "screenshot": base64.b64encode(obs["screenshot"]),
+            # "screenshot": base64.b64encode(obs["screenshot"]),
+            "screenshot": obs["screenshot"],
             "is_finish": done,
             "reward": reward,
         }
@@ -138,9 +191,6 @@ async def shutdown(request: ShutdownRequest):
         logger.error(f"Error shutting down VM ID {vm_id}: {e}")
         return responses.JSONResponse(status_code=400, content={"message": str(e)})
 
-import uuid
-from fastapi import Request
-
 allowed_ips_str = os.getenv("OSGYM_ALLOWED_IPS", "")
 if allowed_ips_str == "":
     RED = "\033[91m"
@@ -156,6 +206,7 @@ print(f"{YELLOW}Allowed IPs: {ALLOWED_IPS}{RESET}")
 @app.middleware("http")
 async def ip_filter_middleware(request: Request, call_next):
     client_ip = request.client.host
+    print(f"Client IP: {client_ip}")
     if client_ip not in ALLOWED_IPS:
         # If IP is not allowed, we return an error immediately
         # and never call the next middleware or route handler
@@ -175,8 +226,8 @@ def _get_available_vm(timeout: int) -> int:
             raise Exception("No available VMs")
         vm_id = available_vms.pop()
         active_vms.append(vm_id)
-        if vm_map.get(vm_id) is None:
-            vm_map[vm_id] = {
+        if vm_map.get(str(vm_id)) is None:
+            vm_map[str(vm_id)] = {
                 "env": DesktopEnv (
                     provider_name="docker",
                     action_space="os_gym",
@@ -197,8 +248,8 @@ def _release_vm(vm_id: Union[int, str]):
     with vm_lock:
         if isinstance(vm_id, int):
             if vm_id <= 100:
-                if vm_map[vm_id]["env"] is not None:
-                    vm_map[vm_id]["env"].close()
+                if vm_map[str(vm_id)]["env"] is not None:
+                    vm_map[str(vm_id)]["env"].close()
                 active_vms.remove(vm_id)
                 available_vms.append(vm_id)
                 logger.info(f"Released VM ID: {vm_id}")
@@ -206,9 +257,10 @@ def _release_vm(vm_id: Union[int, str]):
                 raise Exception(f"VM ID {vm_id} is not allocated or invalid")
         elif vm_id == "all":
             logger.info(f"active_vms: {active_vms}")
+            # logger.info(f"vm_map: {vm_map}")
             for vm_id_i in active_vms:
-                if vm_map[vm_id_i]["env"] is not None:
-                    vm_map[vm_id_i]["env"].close()
+                if str(vm_id_i) in vm_map and vm_map[str(vm_id_i)]["env"] is not None:
+                    vm_map[str(vm_id_i)]["env"].close()
                 available_vms.append(vm_id_i)
                 logger.info(f"Released VM ID: {vm_id_i}")
             active_vms.clear()
@@ -219,10 +271,10 @@ def _get_vm_env(vm_id: int) -> DesktopEnv:
     Get a VM environment by ID.
     """
     with vm_lock:
-        if vm_id not in vm_map or vm_id not in active_vms:
+        if str(vm_id) not in vm_map or vm_id not in active_vms:
             raise Exception(f"VM ID {vm_id} not available")
-        vm_map[vm_id]["visited"] = True
-        return vm_map[vm_id]["env"]
+        vm_map[str(vm_id)]["visited"] = True
+        return vm_map[str(vm_id)]["env"]
 
 def _check_timeout():
     """
@@ -233,7 +285,7 @@ def _check_timeout():
             # logger.info("Checking for VM timeouts...")
             active_vms_copy = active_vms.copy()
             for vm_id in active_vms_copy:
-                vm_info = vm_map[vm_id]
+                vm_info = vm_map[str(vm_id)]
                 if not vm_info["visited"]:
                     vm_info["lifetime"] = max(vm_info["lifetime"] - 60, 0)    # Decrease timeout by 60 seconds
                     logger.info(f"VM ID {vm_id} has not been visited, decreasing lifetime to {vm_info['lifetime']}")
@@ -249,15 +301,28 @@ def _check_timeout():
 
 
 if __name__ == "__main__":
-    # Create logs directory if it doesn't exist
-    if not os.path.exists("logs"):
-        os.makedirs("logs")
-    # Shut all vms down
-    os.system("docker stop $(docker ps -aq) > /dev/null 2>&1")
-    os.system("docker rm $(docker ps -aq) > /dev/null 2>&1")
-    # Start the FastAPI server
-    uvicorn.run(
-        app="main:app",
-        host="0.0.0.0",
-        port=20000
-    )
+    try:
+        # Create logs directory if it doesn't exist
+        if not os.path.exists("logs"):
+            os.makedirs("logs")
+        # Shut all vms down
+        os.system("docker stop $(docker ps -aq) > /dev/null 2>&1")
+        os.system("docker rm $(docker ps -aq) > /dev/null 2>&1")
+        # Register cleanup handlers before starting server
+        signal.signal(signal.SIGINT, _signal_handler)
+        signal.signal(signal.SIGTERM, _signal_handler)
+        atexit.register(_cleanup_all_vms)
+        logger.info("Starting FastAPI server...")
+        # Start the FastAPI server
+        uvicorn.run(
+            app="main:app",
+            host="0.0.0.0",
+            port=20000
+        )
+    except KeyboardInterrupt:
+        logger.info("Keyboard interrupt received, cleaning up...")
+        _cleanup_all_vms()
+    except Exception as e:
+        logger.error(f"Fatal error occurred: {e}", exc_info=True)
+        _cleanup_all_vms()
+        raise

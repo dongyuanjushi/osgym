@@ -16,7 +16,7 @@ RESET = '\033[0m'
 def run_env_worker(worker_id, port, results_dict):
     print(f"{BLUE}Worker port: {port} starting...")
     env_config = {
-        'server_url': f'http://localhost:{port}',
+        'server_url': f'http://127.0.0.1:{port}',
         'json_dir': './env_configs/libreoffice_calc',
         'img_h': 1080,
         'img_w': 1920,
@@ -119,6 +119,8 @@ if __name__ == '__main__':
     results_dict = manager.dict()
     
     print(f"{BLUE}Starting {num_workers} environment workers...{RESET}")
+
+    breakpoint()
     
     # Create and start processes
     for i in range(num_workers):
