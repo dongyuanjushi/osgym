@@ -1,0 +1,21 @@
+{
+  "id": "3e3fc409-bff3-4905-bf16-c968eee3f807",
+  "snapshot": "chrome",
+  "instruction": "I'm a huge movie fan and have kept a record of all the movies I've watched. I'm curious to find out if there are any films released before 2024 from the IMDB Top 30 list that I haven't seen yet. Help me create another sheet 'unseen_movies' in the opened Excel. This sheet should share the same headers and sort the results according to IMDB rankings from high to low.",
+  "source": "authors",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://www.imdb.com'])",
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/3e3fc409-bff3-4905-bf16-c968eee3f807/movies.xlsx', 'path': '/home/user/Desktop/movies.xlsx'}])",
+    "_launch_setup(command=['libreoffice', '--calc', '/home/user/Desktop/movies.xlsx'])"
+  ],
+  "related_apps": [
+    "libreoffice_calc",
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/Desktop/movies.xlsx', 'dest': 'movies.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/3e3fc409-bff3-4905-bf16-c968eee3f807/gold_movies.xlsx', 'dest': 'gold_movies.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 'RNunseen_movies', 'sheet_idx1': 'ENunseen_movies'}])"
+  },
+  "trajectory": "trajectories/"
+}

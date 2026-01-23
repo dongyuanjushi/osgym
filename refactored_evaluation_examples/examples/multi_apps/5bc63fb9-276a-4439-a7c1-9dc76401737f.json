@@ -1,0 +1,22 @@
+{
+  "id": "5bc63fb9-276a-4439-a7c1-9dc76401737f",
+  "snapshot": "multiapps",
+  "instruction": "I have a JSON-formatted data file opened now that stores the responses of several large language models on a specific dataset. Now, I want to filter out all the responses from Gemini and specifically look at the sentences in the responses that contain \"Iliad\". Please copy all of Gemini's responses(values) from the JSON file, paste them into a Word document named \"gemini_results.docx\" under Desktop. Each response should be a new paragraph and sepreated by a new line. Highlight the all the \"Iliad\" word.",
+  "source": "",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/5bc63fb9-276a-4439-a7c1-9dc76401737f/LLM%20results.json', 'path': '/home/user/Desktop/llm_answers.json'}])",
+    "_open_setup(path='/home/user/Desktop/llm_answers.json')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='gemini_results.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); \"])"
+    ],
+    "eval": "compare_docx_files_and_ignore_new_lines(get_vm_file(env, config={'path': '/home/user/Desktop/gemini_results.docx', 'dest': 'gemini_results.docx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/5bc63fb9-276a-4439-a7c1-9dc76401737f/gemini_results_Gold.docx', 'dest': 'gemini_results_Gold.docx'}), ignore_blanks=False)"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "e1e75309-3ddb-4d09-92ec-de869c928143",
+  "snapshot": "chrome",
+  "instruction": "Computer, can you turn the webpage I'm looking at into a PDF file, save it to my Desktop with the default filename and set the margins to none?",
+  "source": "https://in5stepstutorials.com/google-chrome/save-web-page-as-pdf-in-chrome.php",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://lilianweng.github.io/posts/2023-06-23-agent/'])"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "compare_pdfs(get_vm_file(env, config={'path': \"/home/user/Desktop/LLM Powered Autonomous Agents _ Lil'Log.pdf\", 'dest': \"LLM Powered Autonomous Agents _ Lil'Log.pdf\"}), get_pdf_from_url(env, config={'path': 'https://lilianweng.github.io/posts/2023-06-23-agent/', 'dest': \"LLM Powered Autonomous Agents _ Lil'Log_gold.pdf\"}))"
+  },
+  "trajectory": "trajectories/"
+}

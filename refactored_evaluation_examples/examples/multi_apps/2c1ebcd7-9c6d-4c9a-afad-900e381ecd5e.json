@@ -1,0 +1,37 @@
+{
+  "id": "2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Could you please take a moment to review the 'case study' file located within the 'student work' folder? I'm particularly interested in ensuring that the references section at the end of the document adheres to the APA 7th edition formatting guidelines. Making the necessary adjustments if it turns out that the current formatting does not align with APA 7 standards or exists some errors.",
+  "source": "authors",
+  "config": [
+    "_execute_setup(command=['mkdir', '-p', '/home/user/Desktop/students work/', '/home/user/Desktop/Lec powerpoint/', '/home/user/Desktop/Grammar test/', '/home/user/Desktop/Grammar rules PDF/', '/home/user/Desktop/FDI/'])",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/Zheng%20He%20.docx', path='/home/user/Desktop/students work/Zheng He .docx')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/The%20literature%20reviews%20of%20weekly%20readings.docx', path='/home/user/Desktop/students work/The literature reviews of weekly readings.docx')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/The%20British%20Justice%20System.docx', path='/home/user/Desktop/students work/The British Justice System.docx')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/quiz2.docx', path='/home/user/Desktop/students work/quiz2.docx')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/quiz.docx', path='/home/user/Desktop/students work/quiz.docx')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/Q1%262%263.docx', path='/home/user/Desktop/students work/Q1&2&3.docx')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/Photo%20Ethics%20in%20Journalism.docx', path='/home/user/Desktop/students work/Photo Ethics in Journalism.docx')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/cassie.docx', path='/home/user/Desktop/students work/cassie.docx')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/case%20study.docx', path='/home/user/Desktop/students work/case study.docx')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/irregularrules02.pdf', path='/home/user/Desktop/Grammar rules PDF/irregularrules02.pdf')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/irregularrules01.pdf', path='/home/user/Desktop/Grammar rules PDF/irregularrules01.pdf')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/fragrules.pdf', path='/home/user/Desktop/Grammar rules PDF/fragrules.pdf')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/csfsrules.pdf', path='/home/user/Desktop/Grammar rules PDF/csfsrules.pdf')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/Public%20Lecture%20Teaching%20Plan.docx', path='/home/user/Desktop/Public Lecture Teaching Plan.docx')",
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/Course%20Timetable.xlsx', path='/home/user/Desktop/Course Timetable.xlsx')"
+  ],
+  "trajectory": "trajectories/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e",
+  "related_apps": [],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='case study.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=\"python -c \\\"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); \\\"\")"
+    ],
+    "eval": "compare_references(get_cloud_file(env, path='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2c1ebcd7-9c6d-4c9a-afad-900e381ecd5e/case%20study%20gold.docx'), get_vm_file(env, path='/home/user/Desktop/students work/case study.docx'), options={'content_only': True, 'reference_base_result': 0.93})"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

@@ -1,0 +1,22 @@
+{
+  "id": "ec4e3f68-9ea4-4c18-a5c9-69f89d1178b3",
+  "snapshot": "os",
+  "instruction": "Can you remove vim from favorite app in 'favorites'?",
+  "source": "https://www.youtube.com/watch?v=D4WyNjt_hbQ&t=2s",
+  "config": [
+    "_execute_setup(command=\"export DBUS_SESSION_BUS_ADDRESS='unix:path=/run/user/1000/bus'\\ngsettings set org.gnome.shell favorite-apps \\\"['thunderbird.desktop']\\\"\")",
+    "_sleep_setup(seconds=0.5)",
+    "_execute_setup(command=\"export DBUS_SESSION_BUS_ADDRESS='unix:path=/run/user/1000/bus'\\ngsettings set org.gnome.shell favorite-apps \\\"['thunderbird.desktop', 'vim.desktop', 'google-chrome.desktop']\\\"\")",
+    "_execute_setup(command=\"python -c \\\"import pyautogui; import time; pyautogui.click({SCREEN_WIDTH_HALF}, {SCREEN_HEIGHT_HALF}); time.sleep(0.5);\\\"\")"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "eval": "check_gnome_favorite_apps(get_command_output(env, command=\"export DBUS_SESSION_BUS_ADDRESS='unix:path=/run/user/1000/bus'\\ngsettings get org.gnome.shell favorite-apps\", shell=True), rules={'expected': ['google-chrome.desktop', 'thunderbird.desktop']})"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

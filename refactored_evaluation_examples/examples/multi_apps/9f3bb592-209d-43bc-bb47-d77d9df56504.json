@@ -1,0 +1,25 @@
+{
+  "id": "9f3bb592-209d-43bc-bb47-d77d9df56504",
+  "snapshot": "multiapps",
+  "instruction": "I downloaded a video to practice listening, but I don't know how to remove the subtitles. Please help me remove the subtitles from the video and export it as \"subtitles.srt\" and store it in the same directory as the video.",
+  "source": "authors",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/9f3bb592-209d-43bc-bb47-d77d9df56504/video.mp4', 'path': '/home/user/video.mp4'}])",
+    "_open_setup(path='/home/user/video.mp4')",
+    "_activate_window_setup(window_name='video.mp4 - VLC media player')"
+  ],
+  "related_apps": [
+    "os",
+    "vlc",
+    "ubuntu_media_player"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/9f3bb592-209d-43bc-bb47-d77d9df56504/Gold%20subtitles.srt', 'path': '/home/user/subtitles_Gold.srt'}])",
+      "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/9f3bb592-209d-43bc-bb47-d77d9df56504/Subtitles%20script.py', 'path': '/home/user/Desktop/subtitles_script.py'}])",
+      "_command_setup(command='echo {CLIENT_PASSWORD} | sudo -S pip install pysrt', shell='true')"
+    ],
+    "eval": "exact_match(get_vm_command_line(env, config={'command': 'python /home/user/Desktop/subtitles_script.py', 'shell': 'true'}), get_rule(env, config={'rules': {'expected': 'true\\n'}}))"
+  },
+  "trajectory": "trajectories/"
+}

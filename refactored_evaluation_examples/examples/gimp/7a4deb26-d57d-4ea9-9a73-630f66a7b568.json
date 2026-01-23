@@ -1,0 +1,25 @@
+{
+  "id": "7a4deb26-d57d-4ea9-9a73-630f66a7b568",
+  "snapshot": "gimp",
+  "instruction": "Could you tone down the brightness of my photo?",
+  "source": "https://www.quora.com/How-do-I-edit-a-photo-in-GIMP",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/7a4deb26-d57d-4ea9-9a73-630f66a7b568/woman_sitting_by_the_tree.png', 'path': '/home/user/Desktop/woman_sitting_by_the_tree.png'}])",
+    "_launch_setup(command=['gimp', '/home/user/Desktop/woman_sitting_by_the_tree.png'])"
+  ],
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['python3', '-c', 'import time; import pyautogui; time.sleep(1);pyautogui.hotkey([\"shift\", \"ctrl\", \"e\"]);'])",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python3', '-c', 'import time; import pyautogui; time.sleep(1);pyautogui.write(\"edited_darker\");time.sleep(1);pyautogui.press([\"enter\"]);'])",
+      "_sleep_setup(seconds=2)",
+      "_execute_setup(command=['python3', '-c', 'import pyautogui; pyautogui.press([\"enter\"]);'])",
+      "_sleep_setup(seconds=5)"
+    ],
+    "eval": "check_brightness_decrease_and_structure_sim(get_vm_file(env, config={'path': '/home/user/Desktop/edited_darker.png', 'dest': 'edited_darker.png'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/7a4deb26-d57d-4ea9-9a73-630f66a7b568/woman_sitting_by_the_tree.png', 'dest': 'woman_sitting_by_the_tree.png'}))"
+  },
+  "trajectory": "trajectories/"
+}

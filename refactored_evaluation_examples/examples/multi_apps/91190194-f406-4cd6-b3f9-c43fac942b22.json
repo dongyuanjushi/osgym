@@ -1,0 +1,18 @@
+{
+  "id": "91190194-f406-4cd6-b3f9-c43fac942b22",
+  "snapshot": "gimp",
+  "instruction": "Launch GIMP from the command line to edit \"cola.png\" and crop the top 20% off the image for my avatar as \"cropped.png\".",
+  "source": "",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/91190194-f406-4cd6-b3f9-c43fac942b22/cola.png', 'path': '/home/user/Desktop/cola.png'}])",
+    "_execute_setup(command=['python', '-c', 'import pyautogui; import time; pyautogui.hotkey(\"ctrl\", \"alt\", \"t\"); time.sleep(0.5);'])"
+  ],
+  "related_apps": [
+    "gimp",
+    "os"
+  ],
+  "evaluator": {
+    "eval": "check_structure_sim(get_vm_file(env, config={'path': '/home/user/Desktop/cropped.png', 'dest': 'cropped.png'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/91190194-f406-4cd6-b3f9-c43fac942b22/cropped_gold.png', 'dest': 'cropped_gold.png'}))"
+  },
+  "trajectory": "trajectories/"
+}

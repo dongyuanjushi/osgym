@@ -1,0 +1,17 @@
+{
+  "id": "971cbb5b-3cbf-4ff7-9e24-b5c84fcebfa6",
+  "snapshot": "vscode",
+  "instruction": "Please help me change the settings of VS Code so that every time I open it, it automatically creates a python file called \"test.py\" without using any extensions.",
+  "source": "",
+  "config": [
+    "_launch_setup(command=['code'])",
+    "_activate_window_setup(window_name='Visual Studio Code')"
+  ],
+  "related_apps": [
+    "vscode"
+  ],
+  "evaluator": {
+    "eval": "infeasible(get_(env, config={}))"
+  },
+  "trajectory": "trajectories/"
+}

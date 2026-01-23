@@ -1,0 +1,26 @@
+{
+  "id": "d681960f-7bc3-4286-9913-a8812ba3261a",
+  "snapshot": "libreoffice_calc",
+  "instruction": "According to the scale table shown above, calculate and give each student a grade in the table below. Finish the work and don't touch irrelevant regions, even if they are blank.",
+  "source": "https://www.youtube.com/shorts/d7U1S_IsTVM",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/d681960f-7bc3-4286-9913-a8812ba3261a/Student_Grades_and_Remarks.xlsx', 'path': '/home/user/Student_Grades_and_Remarks.xlsx'}])",
+    "_open_setup(path='/home/user/Student_Grades_and_Remarks.xlsx')"
+  ],
+  "trajectory": "trajectories/d681960f-7bc3-4286-9913-a8812ba3261a",
+  "related_apps": [
+    "libreoffice calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='Student_Grades_and_Remarks.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; pyautogui.hotkey('ctrl', 's');\"])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/Student_Grades_and_Remarks.xlsx', 'dest': 'Student_Grades_and_Remarks.xlsx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/d681960f-7bc3-4286-9913-a8812ba3261a/Student_Grades_and_Remarks_gold.xlsx', 'dest': 'Student_Grades_and_Remarks_gold.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

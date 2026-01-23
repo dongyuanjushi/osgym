@@ -1,0 +1,26 @@
+{
+  "id": "ac9bb6cb-1888-43ab-81e4-a98a547918cd",
+  "snapshot": "libreoffice_impress",
+  "instruction": "I am preparing a PPT in Libreoffice impress. The slide number is barely visible to me. Please help me change the color of the slide number to red?",
+  "source": "https://superuser.com/questions/1674211/how-to-change-colour-of-slide-number-in-libre-office",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/ac9bb6cb-1888-43ab-81e4-a98a547918cd/saa-format-guide.pptx', 'path': '/home/user/Desktop/saa-format-guide.pptx'}])",
+    "_open_setup(path='/home/user/Desktop/saa-format-guide.pptx')"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "libreoffice_impress"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='saa-format-guide.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_page_number_colors(get_vm_file(env, config={'path': '/home/user/Desktop/saa-format-guide.pptx', 'dest': 'saa-format-guide.pptx'}), rules={'color': 'red'})"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

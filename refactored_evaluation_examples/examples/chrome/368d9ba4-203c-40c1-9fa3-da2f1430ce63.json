@@ -1,0 +1,22 @@
+{
+  "id": "368d9ba4-203c-40c1-9fa3-da2f1430ce63",
+  "snapshot": "chrome",
+  "instruction": "Find the Monthly forecast for Manchester, GB for this month",
+  "source": "test_task_1",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://www.accuweather.com/'])",
+    "_activate_window_setup(window_name='Google Chrome')"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "check_direct_json_object(get_url_dashPart(env, config={'goto_prefix': 'https://www.', 'partIndex': -2, 'needDeleteId': False, 'returnType': 'json', 'key': 'time'}), rules=get_rule_relativeTime(env, config={'rules': {'relativeTime': {'from': 'this month'}, 'expected': {'time': '{month}-weather'}}})) and is_expected_url_pattern_match(get_active_url_from_accessTree(env, config={'goto_prefix': 'https://www.'}), rules={'expected': ['/manchester/']})"
+  },
+  "proxy": true,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

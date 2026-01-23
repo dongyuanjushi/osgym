@@ -1,0 +1,23 @@
+{
+  "id": "9cf05d24-6bd9-4dae-8967-f67d88f5d38a",
+  "snapshot": "libreoffice_impress",
+  "instruction": "Move to slide 1 and give it a green background color.",
+  "source": "https://arxiv.org/pdf/2311.01767.pdf",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/9cf05d24-6bd9-4dae-8967-f67d88f5d38a/214_9.pptx', 'path': '/home/user/Desktop/214_9.pptx'}])",
+    "_open_setup(path='/home/user/Desktop/214_9.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_impress"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='214_9.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/214_9.pptx', 'dest': '214_9.pptx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/9cf05d24-6bd9-4dae-8967-f67d88f5d38a/214_9_Gold.pptx', 'dest': '214_9_Gold.pptx'}))"
+  },
+  "trajectory": "trajectories/"
+}

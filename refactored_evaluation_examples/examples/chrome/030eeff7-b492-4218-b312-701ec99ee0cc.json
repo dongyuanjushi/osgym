@@ -1,0 +1,25 @@
+{
+  "id": "030eeff7-b492-4218-b312-701ec99ee0cc",
+  "snapshot": "chrome",
+  "instruction": "Can you enable the 'Do Not Track' feature in Chrome to enhance my online privacy?",
+  "source": "https://www.surreycc.gov.uk/website/cookies/do-not-track",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_launch_setup(command=['pkill', 'chrome'])",
+      "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+      "_sleep_setup(seconds=3)"
+    ],
+    "eval": "exact_match(get_enable_do_not_track(env, config={}), rules={'expected': 'true'})"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

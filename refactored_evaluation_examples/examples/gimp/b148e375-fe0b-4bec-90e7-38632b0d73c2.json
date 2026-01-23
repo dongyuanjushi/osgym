@@ -1,0 +1,24 @@
+{
+  "id": "b148e375-fe0b-4bec-90e7-38632b0d73c2",
+  "snapshot": "gimp",
+  "instruction": "Could you assist me in adding a new layer and naming it 'Square'?",
+  "source": "https://www.quora.com/How-do-I-add-layers-in-GIMP",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/b148e375-fe0b-4bec-90e7-38632b0d73c2/white_background.xcf', 'path': '/home/user/Desktop/white_background.xcf'}])",
+    "_launch_setup(command=['gimp', '/home/user/Desktop/white_background.xcf'])"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['python3', '-c', \"import time; import pyautogui; time.sleep(1);pyautogui.hotkey(['ctrl', 'q']);\"])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_config_status(get_gimp_config_file(env, config={'file_name': 'gimprc', 'dest': 'gimprc'}), rule={'type:': 'key-value', 'key': 'layer-new-name', 'value': '\"Square\"'})"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

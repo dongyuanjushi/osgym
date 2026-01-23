@@ -1,0 +1,25 @@
+{
+  "id": "2ae9ba84-3a0d-4d4c-8338-3a1478dc5fe3",
+  "snapshot": "chrome",
+  "instruction": "Lately I have changed my English name to Thomas. I want to update my username. Could you help me change the username in chrome profiles to Thomas?",
+  "source": "https://superuser.com/questions/1393683/how-to-change-the-username-in-google-chrome-profiles?rq=1",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_launch_setup(command=['pkill', 'chrome'])",
+      "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+      "_sleep_setup(seconds=3)"
+    ],
+    "eval": "exact_match(get_profile_name(env, config={}), rules={'expected': 'Thomas'})"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

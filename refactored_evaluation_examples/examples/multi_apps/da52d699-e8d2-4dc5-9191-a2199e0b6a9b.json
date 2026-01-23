@@ -1,0 +1,24 @@
+{
+  "id": "da52d699-e8d2-4dc5-9191-a2199e0b6a9b",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Examine the spreadsheet on the desktop, which contains a record of books read in 2022. Take the website https://howlongtoread.com/ as a reference to identify the book with the slowest reading pace, measured in words per day. I have an empty document named 'book_list_result.docx' on the desktop; please open it and record the title there.",
+  "source": "GAIA",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/da52d699-e8d2-4dc5-9191-a2199e0b6a9b/2023_validation_Book_Reading_Rate.xlsx', 'path': '/home/user/Desktop/2023_validation_Book_Reading_Rate.xlsx'}, {'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/da52d699-e8d2-4dc5-9191-a2199e0b6a9b/book_list_result.docx', 'path': '/home/user/Desktop/book_list_result.docx'}])",
+    "_open_setup(path='/home/user/Desktop/2023_validation_Book_Reading_Rate.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc",
+    "chrome",
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='book_list_result.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); \"])"
+    ],
+    "eval": "compare_docx_files(get_vm_file(env, config={'path': '/home/user/Desktop/book_list_result.docx', 'dest': 'book_list_result.docx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/da52d699-e8d2-4dc5-9191-a2199e0b6a9b/book_list_result_Gold.docx', 'dest': 'book_list_result_Gold.docx'}))"
+  },
+  "trajectory": "trajectories/da52d699-e8d2-4dc5-9191-a2199e0b6a9b"
+}

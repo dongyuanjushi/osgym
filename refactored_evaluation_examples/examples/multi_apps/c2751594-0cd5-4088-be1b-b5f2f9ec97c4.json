@@ -1,0 +1,19 @@
+{
+  "id": "c2751594-0cd5-4088-be1b-b5f2f9ec97c4",
+  "snapshot": "thunderbird",
+  "instruction": "Help me export the first image from the doc file attached in the most recent email in Notes folder, and set this image as the new desktop background.",
+  "source": "authors",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/c2751594-0cd5-4088-be1b-b5f2f9ec97c4/thunderbird-profile.tar.gz', 'path': '/home/user/thunderbird-profile.tar.gz'}])",
+    "_execute_setup(command=['tar', '--recursive-unlink', '-xz', '-f', '/home/user/thunderbird-profile.tar.gz', '-C', '/home/user/'])",
+    "_launch_setup(command=['/usr/bin/thunderbird'])"
+  ],
+  "related_apps": [
+    "thunderbird",
+    "os"
+  ],
+  "evaluator": {
+    "eval": "compare_images(get_vm_wallpaper(env, config={'dest': 'background.png'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/c2751594-0cd5-4088-be1b-b5f2f9ec97c4/background.png', 'dest': 'gold_background.png'}), reference_base_result=0.54)"
+  },
+  "trajectory": "trajectories/"
+}

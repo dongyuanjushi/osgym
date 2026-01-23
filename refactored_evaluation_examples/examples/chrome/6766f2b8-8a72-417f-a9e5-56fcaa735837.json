@@ -1,0 +1,19 @@
+{
+  "id": "6766f2b8-8a72-417f-a9e5-56fcaa735837",
+  "snapshot": "chrome",
+  "instruction": "Could you help me unzip the downloaded extension file from /home/user/Desktop/ to /home/user/Desktop/ and configure it in Chrome's extensions?",
+  "source": "https://support.google.com/chrome/thread/205881926/it-s-possible-to-load-unpacked-extension-automatically-in-chrome?hl=en",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/chrome/6766f2b8-8a72-417f-a9e5-56fcaa735837/helloExtension.zip', 'path': '/home/user/Desktop/helloExtension.zip'}])",
+    "_execute_setup(command='echo {CLIENT_PASSWORD} | sudo -S apt-get update -y && echo {CLIENT_PASSWORD} | sudo -S apt-get install unzip -y && unzip /home/user/Desktop/helloExtension.zip -d /home/user/Desktop/ && rm /home/user/Desktop/helloExtension.zip', shell=True)",
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "is_in_list(get_find_unpacked_extension_path(env, config={}), get_rule(env, config={'rules': {'expected': '/home/user/Desktop/helloExtension'}}))"
+  },
+  "trajectory": "trajectories/"
+}

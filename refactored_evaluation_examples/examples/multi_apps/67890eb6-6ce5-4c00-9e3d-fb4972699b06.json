@@ -1,0 +1,24 @@
+{
+  "id": "67890eb6-6ce5-4c00-9e3d-fb4972699b06",
+  "snapshot": "libreoffice_calc",
+  "instruction": "I am an NLP researcher. Check out the best long paper awards of ACL from 2019 to 2022 and record the 'title', 'year', 'author list' and 'PDF link' into table best_awards_acl.xslx on the desktop. Separate authors only by commas, use offical aclanthology urls not arxiv, and sort rows by years in descending orders.",
+  "source": "authors",
+  "config": [
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/67890eb6-6ce5-4c00-9e3d-fb4972699b06/best_awards_acl.xlsx', path='/home/user/Desktop/best_awards_acl.xlsx')",
+    "_open_setup(path='/home/user/Desktop/best_awards_acl.xlsx')",
+    "_launch_setup(command=[\"google-chrome\", \"--remote-debugging-port=1337\"])",
+    "_launch_setup(command=[\"socat\", \"tcp-listen:9222,fork\", \"tcp:localhost:1337\"])",
+    "_chrome_open_tabs_setup(urls_to_open=[\"https://aclanthology.org/\"])"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "libreoffice_calc",
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "compare_table(get_vm_file(env, path='/home/user/Desktop/best_awards_acl.xlsx'), get_cloud_file(env, path='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/67890eb6-6ce5-4c00-9e3d-fb4972699b06/gold_best_awards_acl.xlsx'), rules=[{\"type\": \"sheet_data\", \"sheet_idx0\": 0, \"sheet_idx1\": \"EI0\"}])"
+  },
+  "proxy": true,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

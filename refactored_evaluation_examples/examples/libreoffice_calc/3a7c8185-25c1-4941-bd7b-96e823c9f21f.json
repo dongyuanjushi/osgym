@@ -1,0 +1,23 @@
+{
+  "id": "3a7c8185-25c1-4941-bd7b-96e823c9f21f",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Sort the data according to column A in an ascending order and then create a line chart with the \"Date Time\" column on the X-axis and quantity on the Y-axis.",
+  "source": "SheetCopilot@5",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/51719eea-10bc-4246-a428-ac7c433dd4b3/BoomerangSales.xlsx', 'path': '/home/user/BoomerangSales.xlsx'}])",
+    "_open_setup(path='/home/user/BoomerangSales.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='BoomerangSales.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/BoomerangSales.xlsx', 'dest': 'BoomerangSales.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/3a7c8185-25c1-4941-bd7b-96e823c9f21f/6_BoomerangSales_gt1.xlsx', 'dest': '6_BoomerangSales_gt1.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}, {'type': 'chart', 'sheet_idx0': 0, 'sheet_idx1': 'EI0', 'chart_props': ['type']}])"
+  },
+  "trajectory": "trajectories/3a7c8185-25c1-4941-bd7b-96e823c9f21f"
+}

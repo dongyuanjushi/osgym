@@ -1,0 +1,22 @@
+{
+  "id": "a746add2-cab0-4740-ac36-c3769d9bfb46",
+  "snapshot": "gimp",
+  "instruction": "Help me open up the Vignette filter window.",
+  "source": "https://www.youtube.com/watch?v=_L_MMU22bAw",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/a746add2-cab0-4740-ac36-c3769d9bfb46/dog_with_background.png', 'path': '/home/user/Desktop/dog_with_background.png'}])",
+    "_launch_setup(command=['gimp', '/home/user/Desktop/dog_with_background.png'])"
+  ],
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['python3', '-c', 'import time; import pyautogui; pyautogui.press([\"esc\"]);time.sleep(1);pyautogui.hotkey([\"ctrl\", \"q\"]);time.sleep(1);'])",
+      "_execute_setup(command=['python3', '-c', 'import time; import pyautogui; pyautogui.press([\"right\"]);time.sleep(1);pyautogui.press([\"enter\"])'])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_include_exclude(get_vm_command_line(env, config={'command': 'cat /home/user/.config/GIMP/2.10/action-history', 'shell': True}), get_rule(env, config={'rules': {'include': ['filters-vignette'], 'exclude': ['error', 'failed', 'not found']}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "7b1e1ff9-bb85-49be-b01d-d6424be18cd0",
+  "snapshot": "thunderbird",
+  "instruction": "Could you help me open up the profile management tabpage in Thunderbird? I want the profile management tabpage inside Thunderbird app, but not the profile chooser dialog during app launch.",
+  "source": "https://www.quora.com/How-do-I-open-a-Thunderbird-profile-manager-utility",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/thunderbird/dd84e895-72fd-4023-a336-97689ded257c/thunderbird-profile.tar.gz', 'path': '/home/user/Desktop/thunderbird-profile.tar.gz'}])",
+    "_execute_setup(command=['tar', '-xzv', '-f', '/home/user/Desktop/thunderbird-profile.tar.gz', '-C', '/home/user/'])",
+    "_launch_setup(command=['/usr/bin/thunderbird'])"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "eval": "check_accessibility_tree(get_accessibility_tree(env, config={}), get_rule(env, config={'rules': [{'selectors': ['application[name=Thunderbird] page-tab-list[attr|id=\"tabmail-tabs\"]>page-tab[name=\"About Profiles\"]']}]}))"
+  },
+  "trajectory": "trajectories/"
+}

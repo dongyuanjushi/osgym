@@ -1,0 +1,26 @@
+{
+  "id": "1273e544-688f-496b-8d89-3e0f40aa0606",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Copy the \"Revenue\" column along with the header to a new sheet named \"Sheet2\".",
+  "source": "SheetCopilot@123",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/1273e544-688f-496b-8d89-3e0f40aa0606/NetIncome.xlsx', 'path': '/home/user/NetIncome.xlsx'}])",
+    "_open_setup(path='/home/user/NetIncome.xlsx')"
+  ],
+  "trajectory": "trajectories/1273e544-688f-496b-8d89-3e0f40aa0606",
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='NetIncome.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_table(vm_file_getter(env, config={'path': '/home/user/NetIncome.xlsx', 'dest': 'NetIncome.xlsx'}), expected=cloud_file_getter(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/1273e544-688f-496b-8d89-3e0f40aa0606/3_NetIncome_gt1.xlsx', 'dest': '3_NetIncome_gt1.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 'RNSheet2', 'sheet_idx1': 'ENSheet2'}])"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

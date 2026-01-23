@@ -1,0 +1,23 @@
+{
+  "id": "df67aebb-fb3a-44fd-b75b-51b6012df509",
+  "snapshot": "vscode",
+  "instruction": "I am writing my paper thesis. I have listed all referenced papers in the opened docx. But my mentor asked me to use latex instead of word writer. So could you help me export the dblp bibtex of these papers into 'references.bib'. By the way, if the paper is published, do not use the arxiv version. Separate each bibtex dict with a blank line for clarity.",
+  "source": "authors",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://dblp.org/'])",
+    "_execute_setup(command=['touch', '/home/user/Desktop/references.bib'])",
+    "_launch_setup(command=['code', '/home/user/Desktop/references.bib'])",
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/df67aebb-fb3a-44fd-b75b-51b6012df509/references.docx', 'path': '/home/user/Desktop/references.docx'}])",
+    "_launch_setup(command=['libreoffice', '--writer', '/home/user/Desktop/references.docx'])"
+  ],
+  "related_apps": [
+    "chrome",
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "eval": "compare_text_file(get_vm_file(env, config={'path': '/home/user/Desktop/references.bib', 'dest': 'references.bib'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/df67aebb-fb3a-44fd-b75b-51b6012df509/references.bib', 'dest': 'gold_references.bib'}), ignore_blanks=True)"
+  },
+  "trajectory": "trajectories/"
+}

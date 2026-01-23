@@ -1,0 +1,22 @@
+{
+  "id": "873cafdd-a581-47f6-8b33-b9696ddb7b05",
+  "snapshot": "multiapps",
+  "instruction": "My friend is a \"plugin guru\" and he recommended some good plug-ins to me. Please go to the Chrome plug-in store and install all the listed plug-ins.",
+  "source": "author",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/873cafdd-a581-47f6-8b33-b9696ddb7b05/Recommended%20plugin%20list.docx', 'path': '/home/user/Desktop/Recommended_plugin_list.docx'}])",
+    "_open_setup(path='/home/user/Desktop/Recommended_plugin_list.docx')",
+    "_activate_window_setup(window_name='Recommended_plugin_list.docx - LibreOffice Writer')"
+  ],
+  "related_apps": [
+    "os",
+    "chrome",
+    "Writer"
+  ],
+  "evaluator": {
+    "eval": "is_expected_installed_extensions(get_find_installed_extension_name(env, config={}), get_rule(env, config={'rules': {'expected': ['Zoom Chrome Extension', 'Speechify Text to Speech Voice Reader', 'React Developer Tools', 'Momentum', 'Google Translate']}}))"
+  },
+  "trajectory": "trajectories/"
+}

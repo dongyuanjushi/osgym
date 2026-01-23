@@ -1,0 +1,23 @@
+{
+  "id": "ce88f674-ab7a-43da-9201-468d38539e4a",
+  "snapshot": "libreoffice_impress",
+  "instruction": "Please set my slides upright instead of sideways.",
+  "source": "https://justclickhere.co.uk/resources/change-slides-in-impress-to-portrait/",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/ce88f674-ab7a-43da-9201-468d38539e4a/AM_Last_Page_Template.pptx', 'path': '/home/user/Desktop/AM_Last_Page_Template.pptx'}])",
+    "_open_setup(path='/home/user/Desktop/AM_Last_Page_Template.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_impress"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='AM_Last_Page_Template.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_slide_orientation_Portrait(get_vm_file(env, config={'path': '/home/user/Desktop/AM_Last_Page_Template.pptx', 'dest': 'AM_Last_Page_Template.pptx'}))"
+  },
+  "trajectory": "trajectories/"
+}

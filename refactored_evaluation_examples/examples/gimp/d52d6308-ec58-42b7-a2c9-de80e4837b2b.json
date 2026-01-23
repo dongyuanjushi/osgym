@@ -1,0 +1,23 @@
+{
+  "id": "d52d6308-ec58-42b7-a2c9-de80e4837b2b",
+  "snapshot": "gimp",
+  "instruction": "Could you help me remove the dock on the left side of the screen in the GIMP?",
+  "source": "https://superuser.com/questions/1447106/how-to-get-rid-of-the-gimp-tool-options-box",
+  "config": [
+    "_launch_setup(command=['gimp'])"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['python3', '-c', \"import pyautogui; pyautogui.hotkey(['ctrl', 'q']);\"])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_config_status(get_gimp_config_file(env, config={'file_name': 'sessionrc', 'dest': 'sessionrc'}), rule={'type:': 'key-value', 'key': 'hide-docks', 'value': 'yes'})"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

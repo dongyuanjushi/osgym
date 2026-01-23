@@ -1,0 +1,18 @@
+{
+  "id": "f8369178-fafe-40c2-adc4-b9b08a125456",
+  "snapshot": "chrome",
+  "instruction": "Help me to install Orchis theme from gnome-look.org and change to it for my GNOME desktop.",
+  "source": "https://itsfoss.com/install-switch-themes-gnome-shell",
+  "config": [],
+  "related_apps": [
+    "chrome",
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['gsettings', 'get', 'org.gnome.desktop.interface', 'gtk-theme'], stdout='gsettings.out')"
+    ],
+    "eval": "check_list(get_cache_file(env, config={'path': 'gsettings.out'}), get_rule(env, config={'rules': {'expect': ['Orchis']}}))"
+  },
+  "trajectory": "trajectories/f8369178-fafe-40c2-adc4-b9b08a125456"
+}

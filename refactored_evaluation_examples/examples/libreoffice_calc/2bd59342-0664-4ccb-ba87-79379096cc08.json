@@ -1,0 +1,17 @@
+{
+  "id": "2bd59342-0664-4ccb-ba87-79379096cc08",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Make sparkline charts for each order id with the data from Jan to Mar in the \"Chart\" column.",
+  "source": "https://www.youtube.com/shorts/L3Z-F1QTQFY",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/2bd59342-0664-4ccb-ba87-79379096cc08/OrderId_Month_Chart.xlsx', 'path': '/home/user/OrderId_Month_Chart.xlsx'}])",
+    "_open_setup(path='/home/user/OrderId_Month_Chart.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "eval": "infeasible(get_(env, config={}))"
+  },
+  "trajectory": "trajectories/2bd59342-0664-4ccb-ba87-79379096cc08"
+}

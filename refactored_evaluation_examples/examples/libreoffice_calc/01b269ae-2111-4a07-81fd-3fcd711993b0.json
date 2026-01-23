@@ -1,0 +1,26 @@
+{
+  "id": "01b269ae-2111-4a07-81fd-3fcd711993b0",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Fill all the blank cells in B1:E30 with the value in the cell above it. Finish the work and don't touch irrelevant regions, even if they are blank.",
+  "source": "https://www.youtube.com/shorts/VrUzPTIwQ04",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/01b269ae-2111-4a07-81fd-3fcd711993b0/Student_Level_Fill_Blank.xlsx', 'path': '/home/user/Student_Level_Fill_Blank.xlsx'}])",
+    "_open_setup(path='/home/user/Student_Level_Fill_Blank.xlsx')"
+  ],
+  "trajectory": "trajectories/01b269ae-2111-4a07-81fd-3fcd711993b0",
+  "related_apps": [
+    "libreoffice calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='Student_Level_Fill_Blank.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; pyautogui.hotkey('ctrl', 's');\"])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/Student_Level_Fill_Blank.xlsx', 'dest': 'Student_Level_Fill_Blank.xlsx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/01b269ae-2111-4a07-81fd-3fcd711993b0/Student_Level_Fill_Blank_gold.xlsx', 'dest': 'Student_Level_Fill_Blank_gold.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

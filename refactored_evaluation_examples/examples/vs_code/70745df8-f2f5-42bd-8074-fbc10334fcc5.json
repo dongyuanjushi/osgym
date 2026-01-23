@@ -1,0 +1,19 @@
+{
+  "id": "70745df8-f2f5-42bd-8074-fbc10334fcc5",
+  "snapshot": "vscode",
+  "instruction": "Please help me open the autosave feature of VS Code and delay AutoSave operations for 500 milliseconds in the VS Code setting.",
+  "source": "https://download.microsoft.com/download/8/A/4/8A48E46A-C355-4E5C-8417-E6ACD8A207D4/VisualStudioCode-TipsAndTricks-Vol.1.pdf",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/vs_code/70745df8-f2f5-42bd-8074-fbc10334fcc5/HW-8-main-20240320T121653Z-001.zip', 'path': '/home/user/Downloads/HW-8-main-20240207T164539Z-001.zip'}])",
+    "_execute_setup(command=['/bin/bash', '-c', 'cd /home/user/Downloads && unzip -q HW-8-main-20240207T164539Z-001.zip'])",
+    "_launch_setup(command=['code', '/home/user/Downloads/HW-8-main/'])",
+    "_activate_window_setup(window_name='Visual Studio Code')"
+  ],
+  "related_apps": [
+    "vscode"
+  ],
+  "evaluator": {
+    "eval": "check_json_settings(get_vm_file(env, config={'path': '/home/user/.config/Code/User/settings.json', 'dest': 'settings.json'}), get_rule(env, config={'rules': {'expected': {'files.autoSave': 'afterDelay', 'files.autoSaveDelay': 500}}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,23 @@
+{
+  "id": "7a5a7856-f1b6-42a4-ade9-1ca81ca0f263",
+  "snapshot": "chrome",
+  "instruction": "Can you save this webpage I'm looking at to bookmarks bar so I can come back to it later?",
+  "source": "https://www.youtube.com/watch?v=ZaZ8GcTxjXA",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://blog.eleuther.ai/rotary-embeddings/', 'https://jalammar.github.io/illustrated-transformer/'])"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_launch_setup(command=['pkill', 'chrome'])",
+      "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+      "_sleep_setup(seconds=3)"
+    ],
+    "eval": "is_expected_bookmarks(get_bookmarks(env, config={}), get_rule(env, config={'rules': {'type': 'bookmark_bar_websites_urls', 'urls': ['https://jalammar.github.io/illustrated-transformer/']}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,23 @@
+{
+  "id": "37608790-6147-45d0-9f20-1137bb35703d",
+  "snapshot": "libreoffice_calc",
+  "instruction": "The information are mixed in one field. Help me split them and fill in the columns of First Name, Last Name and Rank. Finish the work and don't touch the original data.",
+  "source": "https://www.youtube.com/shorts/uzPo_CPCHH8",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/37608790-6147-45d0-9f20-1137bb35703d/Employee_Roles_and_Ranks.xlsx', 'path': '/home/user/Employee_Roles_and_Ranks.xlsx'}])",
+    "_open_setup(path='/home/user/Employee_Roles_and_Ranks.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='Employee_Roles_and_Ranks.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/Employee_Roles_and_Ranks.xlsx', 'dest': 'Employee_Roles_and_Ranks.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/37608790-6147-45d0-9f20-1137bb35703d/Employee_Roles_and_Ranks_gold.xlsx', 'dest': 'Employee_Roles_and_Ranks_gold.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
+  },
+  "trajectory": "trajectories/37608790-6147-45d0-9f20-1137bb35703d"
+}

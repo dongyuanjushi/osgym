@@ -1,0 +1,25 @@
+{
+  "id": "06ca5602-62ca-47f6-ad4f-da151cde54cc",
+  "snapshot": "gimp",
+  "instruction": "Could you help me set the image to Palette-Based?",
+  "source": "https://stackoverflow.com/questions/74664666/how-to-export-palette-based-png-in-gimp",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/06ca5602-62ca-47f6-ad4f-da151cde54cc/computer.png', 'path': '/home/user/Desktop/computer.png'}])",
+    "_launch_setup(command=['gimp', '/home/user/Desktop/computer.png'])"
+  ],
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['python3', '-c', 'import pyautogui; pyautogui.hotkey([\"shift\", \"ctrl\", \"e\"]);'])",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python3', '-c', 'import pyautogui; pyautogui.write(\"palette_computer\");pyautogui.press([\"enter\"]);'])",
+      "_sleep_setup(seconds=2)",
+      "_execute_setup(command=['python3', '-c', 'import pyautogui; pyautogui.press([\"enter\"]);'])",
+      "_sleep_setup(seconds=5)"
+    ],
+    "eval": "check_palette_and_structure_sim(get_vm_file(env, config={'path': '/home/user/Desktop/palette_computer.png', 'dest': 'palette_computer.png'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/06ca5602-62ca-47f6-ad4f-da151cde54cc/computer.png', 'dest': 'computer.png'}))"
+  },
+  "trajectory": "trajectories/"
+}

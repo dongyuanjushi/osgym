@@ -1,0 +1,22 @@
+{
+  "id": "99146c54-4f37-4ab8-9327-5f3291665e1e",
+  "snapshot": "chrome",
+  "instruction": "Please help me set Chrome to delete my browsing data automatically every time I close the browser.",
+  "source": "https://www.youtube.com/watch?v=v0kxqB7Xa6I",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_launch_setup(command=['pkill', 'chrome'])",
+      "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+      "_sleep_setup(seconds=3)"
+    ],
+    "eval": "exact_match(get_data_delete_automacally(env, config={}), get_rule(env, config={'rules': {'expected': 'true'}}))"
+  },
+  "trajectory": "trajectories/"
+}

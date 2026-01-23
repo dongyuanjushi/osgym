@@ -1,0 +1,25 @@
+{
+  "id": "0e5303d4-8820-42f6-b18d-daf7e633de21",
+  "snapshot": "chrome",
+  "instruction": "I want to learn python programming and my friend recommends me this course website. I have grabbed the lecture slide for week 0. Please download the PDFs for other weeks into the opened folder and leave the file name as-it-is.",
+  "source": "authors",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://cs50.harvard.edu/python/2022/weeks/0/'])",
+    "_execute_setup(command=['mkdir', '-p', '/home/user/lecture_slides'])",
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/0e5303d4-8820-42f6-b18d-daf7e633de21/lecture0.pdf', 'path': '/home/user/lecture_slides/lecture0.pdf'}])",
+    "_launch_setup(command=['nautilus', '/home/user/lecture_slides'])"
+  ],
+  "related_apps": [
+    "os",
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['/bin/bash', '-c', 'cd /home/user && zip -qr lecture_slides.zip lecture_slides/'])"
+    ],
+    "eval": "compare_archive(get_vm_file(env, config={'path': '/home/user/lecture_slides.zip', 'dest': 'lecture_slides.zip'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/0e5303d4-8820-42f6-b18d-daf7e633de21/lecture_slides.zip', 'dest': 'gold_lecture_slides.zip'}), file_path='lecture_slides', file_type='pdf')"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,23 @@
+{
+  "id": "26a8440e-c166-4c50-aef4-bfb77314b46b",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Create a table with two column headers (\"Month\" and \"Total\") in a new sheet named \"Sheet2\" to show the total sales for all months.",
+  "source": "SheetCopilot@152",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/0326d92d-d218-48a8-9ca1-981cd6d064c7/SalesRep.xlsx', 'path': '/home/user/SalesRep.xlsx'}])",
+    "_open_setup(path='/home/user/SalesRep.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='SalesRep.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/SalesRep.xlsx', 'dest': 'SalesRep.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/26a8440e-c166-4c50-aef4-bfb77314b46b/3_SalesRep_gt1.xlsx', 'dest': '3_SalesRep_gt1.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 'RNSheet2', 'sheet_idx1': 'ENSheet2'}])"
+  },
+  "trajectory": "trajectories/26a8440e-c166-4c50-aef4-bfb77314b46b"
+}

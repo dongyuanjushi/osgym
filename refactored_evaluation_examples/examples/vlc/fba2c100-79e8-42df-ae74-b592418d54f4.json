@@ -1,0 +1,20 @@
+{
+  "id": "fba2c100-79e8-42df-ae74-b592418d54f4",
+  "snapshot": "base_setup",
+  "instruction": "Snap a photo of the current video scene, save it as 'interstellar.png', and put it on the Desktop, please.",
+  "source": "https://www.youtube.com/watch?v=XHprwDJ0-fU&t=436s",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/vlc/fba2c100-79e8-42df-ae74-b592418d54f4/Interstellar%20Movie%20-%20Official%20Trailer.mp4', 'path': '/home/user/Desktop/Interstellar Movie - Official Trailer.mp4'}])",
+    "_launch_setup(command=\"VLC_VERBOSE=-1 vlc --no-audio --no-video-title-show --start-time=120.5 --stop-time=121 --play-and-pause '/home/user/Desktop/Interstellar Movie - Official Trailer.mp4'\", shell=True)",
+    "_sleep_setup(seconds=1)",
+    "_activate_window_setup(window_name='Interstellar Movie - Interstellar Movie - Official Trailer - VLC media player')",
+    "_execute_setup(command=['python', '-c', 'import pyautogui; import time; pyautogui.click({SCREEN_WIDTH_HALF}, {SCREEN_HEIGHT_HALF}); time.sleep(0.5);'])"
+  ],
+  "related_apps": [
+    "vlc"
+  ],
+  "evaluator": {
+    "eval": "compare_images(get_vm_file(env, config={'path': '/home/user/Desktop/interstellar.png', 'dest': 'interstellar.png'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/vlc/fba2c100-79e8-42df-ae74-b592418d54f4/interstellar.png', 'dest': 'interstellar_gold.png'}))"
+  },
+  "trajectory": "trajectories/"
+}

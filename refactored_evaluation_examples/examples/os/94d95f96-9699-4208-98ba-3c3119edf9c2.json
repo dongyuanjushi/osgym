@@ -1,0 +1,16 @@
+{
+  "id": "94d95f96-9699-4208-98ba-3c3119edf9c2",
+  "snapshot": "os",
+  "instruction": "I want to install Spotify on my current system. Could you please help me?",
+  "source": "https://help.ubuntu.com/lts/ubuntu-help/addremove-install.html.en",
+  "config": [
+    "_execute_setup(command=['python', '-c', 'import pyautogui; import time; pyautogui.click({SCREEN_WIDTH_HALF}, {SCREEN_HEIGHT_HALF}); time.sleep(0.5);'])"
+  ],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "eval": "check_include_exclude(get_vm_command_line(env, config={'command': 'which spotify'}), get_rule(env, config={'rules': {'include': ['spotify'], 'exclude': ['not found']}}))"
+  },
+  "trajectory": "trajectories/"
+}

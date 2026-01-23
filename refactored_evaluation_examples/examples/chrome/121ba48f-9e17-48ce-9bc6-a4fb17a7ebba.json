@@ -1,0 +1,22 @@
+{
+  "id": "121ba48f-9e17-48ce-9bc6-a4fb17a7ebba",
+  "snapshot": "chrome",
+  "instruction": "Find Dota 2 game and add all DLC to cart.",
+  "source": "Mind2Web",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://www.dota2.com/home', 'https://store.steampowered.com'])",
+    "_activate_window_setup(window_name='Google Chrome')"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "is_added_to_steam_cart(get_page_info(env, config={'url': 'https://store.steampowered.com/cart/'}), rule={'items': ['The Dota 2 Official Soundtrack']})"
+  },
+  "proxy": true,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

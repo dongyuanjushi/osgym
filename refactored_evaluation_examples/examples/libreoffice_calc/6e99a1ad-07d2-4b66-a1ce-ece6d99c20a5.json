@@ -1,0 +1,25 @@
+{
+  "id": "6e99a1ad-07d2-4b66-a1ce-ece6d99c20a5",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Help me format column \"spent\" by keeping two decimal points. ",
+  "source": "https://www.youtube.com/watch?v=nl-nXjJurhQ",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/6e99a1ad-07d2-4b66-a1ce-ece6d99c20a5/Keep_Two_decimal_points.xlsx', 'path': '/home/user/Keep_Two_decimal_points.xlsx'}])",
+    "_open_setup(path='/home/user/Keep_Two_decimal_points.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='Keep_Two_decimal_points.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['libreoffice', '--convert-to', 'csv:Text - txt - csv (StarCalc):44,34,UTF-8,,,,false,true,true,false,false,1', '--outdir', '/home/user', '/home/user/Keep_Two_decimal_points.xlsx'])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_table(get_vm_file(env, config={'path': ['/home/user/Keep_Two_decimal_points.xlsx', '/home/user/Keep_Two_decimal_points-Sheet1.csv'], 'dest': ['Keep_Two_decimal_points.xlsx', 'Keep_Two_decimal_points-Sheet1.csv'], 'multi': True}), get_cloud_file(env, config={'path': ['https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/6e99a1ad-07d2-4b66-a1ce-ece6d99c20a5/Keep_Two_decimal_points_gold.xlsx', 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/6e99a1ad-07d2-4b66-a1ce-ece6d99c20a5/Keep_Two_decimal_points_gold-Sheet1.csv'], 'dest': ['Keep_Two_decimal_points_gold.xlsx', 'Keep_Two_decimal_points_gold-Sheet1.csv'], 'multi': True}), rules=[{'type': 'sheet_print', 'sheet_idx0': 'RNSheet1', 'sheet_idx1': 'ENSheet1'}])"
+  },
+  "trajectory": "trajectories/6e99a1ad-07d2-4b66-a1ce-ece6d99c20a5"
+}

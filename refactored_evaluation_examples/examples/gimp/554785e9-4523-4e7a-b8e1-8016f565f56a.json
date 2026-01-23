@@ -1,0 +1,28 @@
+{
+  "id": "554785e9-4523-4e7a-b8e1-8016f565f56a",
+  "snapshot": "gimp",
+  "instruction": "Could you assist me in enhancing the color vibrancy of my photo?",
+  "source": "https://www.quora.com/How-do-I-edit-a-photo-in-GIMP",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/554785e9-4523-4e7a-b8e1-8016f565f56a/woman_sitting_by_the_tree2.png', 'path': '/home/user/Desktop/woman_sitting_by_the_tree2.png'}])",
+    "_launch_setup(command=['gimp', '/home/user/Desktop/woman_sitting_by_the_tree2.png'])"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['python3', '-c', \"import pyautogui; pyautogui.hotkey(['shift', 'ctrl', 'e']);\"])",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python3', '-c', \"import time; import pyautogui; time.sleep(1);pyautogui.write('edited_colorful');time.sleep(1);pyautogui.press(['enter']);\"])",
+      "_sleep_setup(seconds=2)",
+      "_execute_setup(command=['python3', '-c', \"import pyautogui; pyautogui.press(['enter']);\"])",
+      "_sleep_setup(seconds=5)"
+    ],
+    "eval": "check_saturation_increase_and_structure_sim(get_vm_file(env, config={'path': '/home/user/Desktop/edited_colorful.png', 'dest': 'edited_colorful.png'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/554785e9-4523-4e7a-b8e1-8016f565f56a/woman_sitting_by_the_tree2.png', 'dest': 'woman_sitting_by_the_tree2.png'}))"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

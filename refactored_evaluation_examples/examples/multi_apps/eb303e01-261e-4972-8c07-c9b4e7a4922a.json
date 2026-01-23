@@ -1,0 +1,24 @@
+{
+  "id": "eb303e01-261e-4972-8c07-c9b4e7a4922a",
+  "snapshot": "libreoffice_impress",
+  "instruction": "Tomorrow, I'm scheduled to deliver a talk, and my PowerPoint slides and speaking notes are saved on the desktop. Help me insert my planned remarks for each slide into the \"note\" section of the PowerPoint as a reminder. I've completed this task for some slides; assist me in completing the remaining part.",
+  "source": "authors",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/eb303e01-261e-4972-8c07-c9b4e7a4922a/lecture1-2021-with-ink.pptx', 'path': '/home/user/Desktop/lecture1-2021-with-ink.pptx'}, {'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/eb303e01-261e-4972-8c07-c9b4e7a4922a/notes.docx', 'path': '/home/user/Desktop/notes.docx'}])",
+    "_open_setup(path='/home/user/Desktop/lecture1-2021-with-ink.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_impress",
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='lecture1-2021-with-ink.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/lecture1-2021-with-ink.pptx', 'dest': 'lecture1-2021-with-ink.pptx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/eb303e01-261e-4972-8c07-c9b4e7a4922a/lecture1-2021-with-ink_Gold.pptx', 'dest': 'lecture1-2021-with-ink_Gold.pptx'}), examine_shape=False, examine_bullets=False)"
+  },
+  "trajectory": "trajectories/eb303e01-261e-4972-8c07-c9b4e7a4922a"
+}

@@ -1,0 +1,27 @@
+{
+  "id": "37887e8c-da15-4192-923c-08fa390a176d",
+  "snapshot": "os",
+  "instruction": "Compress all files in the \"/tmp/test_files\" directory tree that were last modified 30 days ago",
+  "source": "NL2Bash",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/os/37887e8c-da15-4192-923c-08fa390a176d/setup.sh', 'path': 'setup.sh'}])",
+    "_execute_setup(command=['chmod +x setup.sh'], shell=True)",
+    "_execute_setup(command=['./setup.sh'], shell=True)",
+    "_execute_setup(command=['python', '-c', 'import pyautogui; import time; time.sleep(0.5); pyautogui.click({SCREEN_WIDTH_HALF}, {SCREEN_HEIGHT_HALF}); time.sleep(0.5); pyautogui.hotkey(\\'ctrl\\', \\'alt\\', \\'t\\'); time.sleep(0.5)'])",
+    "_activate_window_setup(window_name='Terminal')"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/os/37887e8c-da15-4192-923c-08fa390a176d/eval_20250703.sh', 'path': 'eval.sh'}])",
+      "_execute_setup(command=['chmod +x eval.sh'], shell=True)"
+    ],
+    "eval": "check_include_exclude(get_vm_command_line(env, config={'command': 'bash eval.sh', 'shell': True}), rules={'include': ['Success: The task was completed correctly.'], 'exclude': []})"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

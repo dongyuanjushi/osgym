@@ -1,0 +1,21 @@
+{
+  "id": "acb0f96b-e27c-44d8-b55f-7cb76609dfcd",
+  "snapshot": "os",
+  "instruction": "Please help me clone the repo \"https://github.com/xlang-ai/instructor-embedding\" to /home/user.",
+  "source": "authors",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])"
+  ],
+  "related_apps": [
+    "os",
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command='cd /home/user && ls -R instructor-embedding/ > log.txt', shell=True)"
+    ],
+    "eval": "compare_text_file(get_vm_file(env, config={'path': '/home/user/log.txt', 'dest': 'log.txt'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/acb0f96b-e27c-44d8-b55f-7cb76609dfcd/log_Gold.txt', 'dest': 'log_Gold.txt'}))"
+  },
+  "trajectory": "trajectories/acb0f96b-e27c-44d8-b55f-7cb76609dfcd"
+}

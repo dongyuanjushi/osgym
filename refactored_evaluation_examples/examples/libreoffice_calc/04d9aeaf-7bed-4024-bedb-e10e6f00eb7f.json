@@ -1,0 +1,23 @@
+{
+  "id": "04d9aeaf-7bed-4024-bedb-e10e6f00eb7f",
+  "snapshot": "libreoffice_calc",
+  "instruction": "In a new sheet with 4 headers \"Year\", \"CA changes\", \"FA changes\", and \"OA changes\", calculate the percentage annual changes compared to last year in 2015 to 2019 for the Current Assets, Fixed Assets, and Other Assets columns. ",
+  "source": "SheetCopilot@168",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/04d9aeaf-7bed-4024-bedb-e10e6f00eb7f/SmallBalanceSheet.xlsx', 'path': '/home/user/SmallBalanceSheet.xlsx'}])",
+    "_open_setup(path='/home/user/SmallBalanceSheet.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='SmallBalanceSheet.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/SmallBalanceSheet.xlsx', 'dest': 'SmallBalanceSheet.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/04d9aeaf-7bed-4024-bedb-e10e6f00eb7f/4_SmallBalanceSheet_gt1.xlsx', 'dest': '4_SmallBalanceSheet_gt1.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 'RNSheet2', 'sheet_idx1': 'ENSheet2'}])"
+  },
+  "trajectory": "trajectories/04d9aeaf-7bed-4024-bedb-e10e6f00eb7f"
+}

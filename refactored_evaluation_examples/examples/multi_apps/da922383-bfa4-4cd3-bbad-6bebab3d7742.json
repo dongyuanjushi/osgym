@@ -1,0 +1,23 @@
+{
+  "id": "da922383-bfa4-4cd3-bbad-6bebab3d7742",
+  "snapshot": "multiapps",
+  "instruction": "I browsed a lot of interesting blog articles today. I hope to store these articles in my local designated folder just like zotero stores papers. Please download the blogs opening now in pdf format and save them in their title to /home/user/Documents/Blog.",
+  "source": "authors",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://lilianweng.github.io/posts/2023-06-23-agent/', 'https://lilianweng.github.io/posts/2024-02-05-human-data-quality/'])"
+  ],
+  "related_apps": [
+    "chrome",
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/da922383-bfa4-4cd3-bbad-6bebab3d7742/script.py', 'path': '/home/user/Desktop/script.py'}])",
+      "_execute_setup(command='pip install PyMuPDF', shell='true')"
+    ],
+    "eval": "exact_match(get_vm_command_line(env, config={'command': 'python /home/user/Desktop/script.py', 'shell': 'true'}), get_rule(env, config={'rules': {'expected': '[1, 1]\\n'}}))"
+  },
+  "trajectory": "trajectories/"
+}

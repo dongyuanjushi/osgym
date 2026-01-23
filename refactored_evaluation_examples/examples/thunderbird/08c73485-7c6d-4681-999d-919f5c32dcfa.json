@@ -1,0 +1,22 @@
+{
+  "id": "08c73485-7c6d-4681-999d-919f5c32dcfa",
+  "snapshot": "thunderbird",
+  "instruction": "Thunderbird's message filters seem to only fire on Inbox automatically. If you want to filter on subfolders, you'd have to start this filter manually. I am wondering if the filter can be applied automatically. Could you help me apply automatic message filters to subfolders",
+  "source": "https://superuser.com/questions/544480/how-to-apply-automatic-message-filters-to-subfolders-too?noredirect=1&lq=1",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/thunderbird/dd84e895-72fd-4023-a336-97689ded257c/thunderbird-profile.tar.gz', 'path': '/home/user/thunderbird-profile.tar.gz'}])",
+    "_execute_setup(command=['tar', '-xzv', '--recursive-unlink', '-f', '/home/user/thunderbird-profile.tar.gz', '-C', '/home/user/'])",
+    "_launch_setup(command=['/usr/bin/thunderbird'])"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_close_window_setup(window_name='Mail.thunderbird', strict=True, by_class=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_thunderbird_prefs(get_vm_file(env, config={'path': '/home/user/.thunderbird/t5q2a5hp.default-release/prefs.js', 'dest': 'thunder-prefs.js'}), get_rule(env, config={'rules': {'expect': {'mail.server.default.applyIncomingFilters': {'method': 'eq', 'ref': True}, 'mail.imap.use_status_for_biff': {'method': 'eq', 'ref': False}}, 'unexpect': {'mail.server.default.autosync_offline_stores': {'method': 'eq', 'ref': False}}}}))"
+  },
+  "trajectory": "trajectories/"
+}

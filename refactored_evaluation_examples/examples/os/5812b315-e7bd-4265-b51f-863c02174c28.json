@@ -1,0 +1,21 @@
+{
+  "id": "5812b315-e7bd-4265-b51f-863c02174c28",
+  "snapshot": "os",
+  "instruction": "Please create an SSH user named \"charles\" with password \"Ex@mpleP@55w0rd!\" on Ubuntu who is only allowed to access the folder \"/home/test1\".",
+  "source": "https://superuser.com/questions/149404/create-an-ssh-user-who-only-has-permission-to-access-specific-folders",
+  "config": [
+    "_execute_setup(command='mkdir /home/test1', shell=True)"
+  ],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command='echo {CLIENT_PASSWORD} | sudo -S apt-get install -y expect', shell=True)",
+      "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/os/5812b315-e7bd-4265-b51f-863c02174c28/check_password.sh', 'path': 'check_password.sh'}])",
+      "_execute_setup(command='chmod +x check_password.sh', shell=True)"
+    ],
+    "eval": "check_include_exclude(get_vm_command_line(env, config={'command': 'USERNAME=\"charles\"; HOMEDIR=\"/home/test1\"; PASSWORD=\"Ex@mpleP@55w0rd!\"; ./check_password.sh \"$USERNAME\" \"$PASSWORD\" && [ \"$(getent passwd \"$USERNAME\" | cut -d: -f6)\" = \"$HOMEDIR\" ] && [ $(stat -c \"%A\" \"$HOMEDIR\" | cut -b 3) = \"w\" ] && echo \"Password, home directory, and write permission check passed\" || echo \"Check failed\"', 'shell': True}), get_rule(env, config={'rules': {'include': ['Password, home directory, and write permission check passed'], 'exclude': []}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,25 @@
+{
+  "id": "0810415c-bde4-4443-9047-d5f70165a697",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Make the line spacing of first two paragraph into double line spacing",
+  "source": "https://www.youtube.com/watch?v=Q_AaL6ljudU",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/0810415c-bde4-4443-9047-d5f70165a697/Novels_Intro_Packet.docx', 'path': '/home/user/Desktop/Novels_Intro_Packet.docx'}])",
+    "_open_setup(path='/home/user/Desktop/Novels_Intro_Packet.docx')"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='Novels_Intro_Packet.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); \"])"
+    ],
+    "eval": "compare_line_spacing(get_vm_file(env, config={'path': '/home/user/Desktop/Novels_Intro_Packet.docx', 'dest': 'Novels_Intro_Packet.docx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/0810415c-bde4-4443-9047-d5f70165a697/Novels_Intro_Packet_Gold.docx', 'dest': 'Novels_Intro_Packet_Gold.docx'})) or compare_line_spacing(get_vm_file(env, config={'path': '/home/user/Desktop/Novels_Intro_Packet.docx', 'dest': 'Novels_Intro_Packet.docx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/0810415c-bde4-4443-9047-d5f70165a697/Novels_Intro_Packet_Gold_2.docx', 'dest': 'Novels_Intro_Packet_Gold_2.docx'}))"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

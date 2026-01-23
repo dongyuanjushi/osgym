@@ -1,0 +1,23 @@
+{
+  "id": "7b7617bd-57cc-468e-9c91-40c4ec2bcb3d",
+  "snapshot": "gimp",
+  "instruction": "Set the minimum number of undo steps to 100.",
+  "source": "https://www.youtube.com/watch?v=G_PjQAy0iiU",
+  "config": [
+    "_launch_setup(command=['gimp'])"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['python3', '-c', \"import time; import pyautogui; time.sleep(1);pyautogui.hotkey(['ctrl', 'q']);\"])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_config_status(get_gimp_config_file(env, config={'file_name': 'gimprc', 'dest': 'gimprc'}), rule={'type:': 'key-value', 'key': 'undo-levels', 'value': '100'})"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

@@ -1,0 +1,24 @@
+{
+  "id": "6f56bf42-85b8-4fbb-8e06-6c44960184ba",
+  "snapshot": "os",
+  "instruction": "Copies file 'file1' to each of directories 'dir1', 'dir2', 'dir3'.",
+  "source": "NL2Bash",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/os/6f56bf42-85b8-4fbb-8e06-6c44960184ba/setup.sh', 'path': 'setup.sh'}])",
+    "_execute_setup(command='chmod +x setup.sh', shell=True)",
+    "_execute_setup(command='./setup.sh', shell=True)",
+    "_execute_setup(command=['python', '-c', \"import pyautogui; import time; time.sleep(0.5); pyautogui.click({SCREEN_WIDTH_HALF}, {SCREEN_HEIGHT_HALF}); time.sleep(0.5); pyautogui.hotkey('ctrl', 'alt', 't'); time.sleep(0.5)\"])",
+    "_activate_window_setup(window_name='Terminal')"
+  ],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/os/6f56bf42-85b8-4fbb-8e06-6c44960184ba/eval.sh', 'path': 'eval.sh'}])",
+      "_execute_setup(command='chmod +x eval.sh', shell=True)"
+    ],
+    "eval": "check_include_exclude(get_vm_command_line(env, config={'command': 'bash eval.sh', 'shell': True}), get_rule(env, config={'rules': {'include': ['Success: file1 exists in dir1.\\nSuccess: file1 exists in dir2.\\nSuccess: file1 exists in dir3.\\n'], 'exclude': []}}))"
+  },
+  "trajectory": "trajectories/"
+}

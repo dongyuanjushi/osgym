@@ -1,0 +1,21 @@
+{
+  "id": "aceb0368-56b8-4073-b70e-3dc9aee184e0",
+  "snapshot": "libreoffice_calc",
+  "instruction": "I am grading students' English exam papers, but the test consists only of multiple-choice questions. It's too exhausting to check each question one by one and record the detailed scores. Can you help me compare the remaining students' answers with the answer key and record the detailed scoring in the opened spreadsheet?",
+  "source": "authors",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/aceb0368-56b8-4073-b70e-3dc9aee184e0/exam.zip', 'path': '/home/user/exam.zip'}])",
+    "_execute_setup(command=['unzip', '/home/user/exam.zip', '-d', '/home/user/'])",
+    "_launch_setup(command=['libreoffice', '--writer', '/home/user/exam/ReferenceAnswers.docx'])",
+    "_launch_setup(command=['libreoffice', '--calc', '/home/user/exam/grades.xlsx'])",
+    "_launch_setup(command=['nautilus', '/home/user/exam/'])"
+  ],
+  "related_apps": [
+    "thunderbird",
+    "os"
+  ],
+  "evaluator": {
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/exam/grades.xlsx', 'dest': 'grades.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/aceb0368-56b8-4073-b70e-3dc9aee184e0/grades.xlsx', 'dest': 'gold_grades.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
+  },
+  "trajectory": "trajectories/"
+}

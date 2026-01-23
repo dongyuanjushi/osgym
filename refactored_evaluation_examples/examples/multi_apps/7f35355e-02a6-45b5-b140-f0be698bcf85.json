@@ -1,0 +1,21 @@
+{
+  "id": "7f35355e-02a6-45b5-b140-f0be698bcf85",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Export the table to a CSV file and then help me write code to find the medium price (fill empty value with average). Save the result in \"result.txt\".",
+  "source": "",
+  "config": [
+    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/7f35355e-02a6-45b5-b140-f0be698bcf85/stock.xlsx', path='/home/user/Desktop/stock.xlsx')",
+    "_open_setup(path='/home/user/Desktop/stock.xlsx')"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "libreoffice_calc",
+    "vs_code"
+  ],
+  "evaluator": {
+    "eval": "compare_result_files(get_vm_file(env, path='/home/user/Desktop/result.txt'), get_cloud_file(env, path='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/7f35355e-02a6-45b5-b140-f0be698bcf85/result_gold.txt'))"
+  },
+  "proxy": false,
+  "fixed_ip": false,
+  "possibility_of_env_change": "low"
+}

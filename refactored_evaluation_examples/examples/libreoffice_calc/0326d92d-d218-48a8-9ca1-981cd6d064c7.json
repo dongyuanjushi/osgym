@@ -1,0 +1,23 @@
+{
+  "id": "0326d92d-d218-48a8-9ca1-981cd6d064c7",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Calculate the total sales in an underneath row called \"Total\" and display the total of each month as bars. Then calculate the month-on-month growth percentage for Feb to Jun in another row called \"Growth\" and show them in a line chart (Jan should be omitted in the chart as well). Set the chart titles as the two row headers respectively.",
+  "source": "SheetCopilot@151",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/0326d92d-d218-48a8-9ca1-981cd6d064c7/SalesRep.xlsx', 'path': '/home/user/SalesRep.xlsx'}])",
+    "_open_setup(path='/home/user/SalesRep.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='SalesRep.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/SalesRep.xlsx', 'dest': 'SalesRep.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/0326d92d-d218-48a8-9ca1-981cd6d064c7/2_SalesRep_gt1.xlsx', 'dest': '2_SalesRep_gt1.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}, {'type': 'chart', 'sheet_idx0': 0, 'sheet_idx1': 'EI0', 'chart_props': ['type', 'title']}])"
+  },
+  "trajectory": "trajectories/0326d92d-d218-48a8-9ca1-981cd6d064c7"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "cabb3bae-cccb-41bd-9f5d-0f3a9fecd825",
+  "snapshot": "chrome",
+  "instruction": "Browse spider-man toys for kids and sort by lowest price.",
+  "source": "online_tasks",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://www.kohls.com/'])",
+    "_activate_window_setup(window_name='Google Chrome')"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "check_direct_json_object(get_active_tab_html_parse(env, config={'goto_prefix': 'https://www.', 'category': 'class&url', 'class_multiObject_li': {'pmpSearch_breadcrumb': ['Spider-Man', 'Toys', 'Kids'], 'sbSelector': ['Price Low-High']}, 'url_include_expected_multichoice': {'Spider-Man': 'Spider-Man', 'spiderman': 'Spider-Man', 'Toys': 'Toys', 'Kids': 'Kids', 'S=4': 'Price Low-High'}}), get_rule(env, config={'rules': {'expected': {'spider-man': True, 'toys': True, 'kids': True, 'price low-high': True, 'is_other_exist': False}}}))"
+  },
+  "trajectory": "trajectories/"
+}

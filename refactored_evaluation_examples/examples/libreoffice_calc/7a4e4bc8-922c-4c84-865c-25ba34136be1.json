@@ -1,0 +1,23 @@
+{
+  "id": "7a4e4bc8-922c-4c84-865c-25ba34136be1",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Reorder the columns to be \"Date\", \"First Name\", \"Last Name\", \"Order ID\", \"Sales\". Finish the work and don't touch irrelevant regions, even if they are blank.",
+  "source": "https://www.youtube.com/shorts/bvUhr1AHs44",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/7a4e4bc8-922c-4c84-865c-25ba34136be1/Name_Order_Id_move_column.xlsx', 'path': '/home/user/Name_Order_Id_move_column.xlsx'}])",
+    "_open_setup(path='/home/user/Name_Order_Id_move_column.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='Name_Order_Id_move_column.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/Name_Order_Id_move_column.xlsx', 'dest': 'Name_Order_Id_move_column.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/7a4e4bc8-922c-4c84-865c-25ba34136be1/Name_Order_Id_move_column_gold.xlsx', 'dest': 'Name_Order_Id_move_column_gold.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
+  },
+  "trajectory": "trajectories/7a4e4bc8-922c-4c84-865c-25ba34136be1"
+}

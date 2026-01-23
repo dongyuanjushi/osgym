@@ -1,0 +1,22 @@
+{
+  "id": "58565672-7bfe-48ab-b828-db349231de6b",
+  "snapshot": "chrome",
+  "instruction": "Can you assist me by opening the first link in the latest email in Bills folder and displaying it in a new Chrome tab?",
+  "source": "https://superuser.com/questions/1792660/open-link-from-other-application-does-not-open-the-url-in-firefox",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://www.apple.com/', 'https://scholar.google.com/'])",
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/58565672-7bfe-48ab-b828-db349231de6b/thunderbird-profile.tar.gz', 'path': '/home/user/thunderbird-profile.tar.gz'}])",
+    "_execute_setup(command=['tar', '-xz', '--recursive-unlink', '-f', '/home/user/thunderbird-profile.tar.gz', '-C', '/home/user/'])",
+    "_launch_setup(command=['/usr/bin/thunderbird'])"
+  ],
+  "related_apps": [
+    "thunderbird",
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "is_expected_tabs(get_open_tabs_info(env, config={}), get_rule(env, config={'rules': {'type': 'url', 'urls': ['https://www.apple.com/', 'https://scholar.google.com/', 'https://www.amazon.com/']}}))"
+  },
+  "trajectory": "trajectories/"
+}

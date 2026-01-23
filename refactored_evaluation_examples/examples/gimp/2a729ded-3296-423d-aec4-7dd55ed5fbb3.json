@@ -1,0 +1,25 @@
+{
+  "id": "2a729ded-3296-423d-aec4-7dd55ed5fbb3",
+  "snapshot": "gimp",
+  "instruction": "Could you make the background of this image transparent for me?",
+  "source": "https://www.youtube.com/watch?v=lOzSiOIipSM",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/2a729ded-3296-423d-aec4-7dd55ed5fbb3/dog_with_background.png', 'path': '/home/user/Desktop/dog_with_background.png'}])",
+    "_launch_setup(command=['gimp', '/home/user/Desktop/dog_with_background.png'])"
+  ],
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['python3', '-c', 'import time; import pyautogui; time.sleep(1);pyautogui.hotkey([\"shift\", \"ctrl\", \"e\"]);'])",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python3', '-c', 'import time; import pyautogui; time.sleep(1);pyautogui.write(\"dog_without_background\");time.sleep(1);pyautogui.press([\"enter\"]);'])",
+      "_sleep_setup(seconds=2)",
+      "_execute_setup(command=['python3', '-c', 'import time; import pyautogui; time.sleep(1);pyautogui.press([\"enter\"]);'])",
+      "_sleep_setup(seconds=5)"
+    ],
+    "eval": "check_structure_sim(get_vm_file(env, config={'path': '/home/user/Desktop/dog_without_background.png', 'dest': 'dog_without_background.png'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/2a729ded-3296-423d-aec4-7dd55ed5fbb3/dog_cutout_gold.png', 'dest': 'dog_cutout_gold.png'}))"
+  },
+  "trajectory": "trajectories/"
+}

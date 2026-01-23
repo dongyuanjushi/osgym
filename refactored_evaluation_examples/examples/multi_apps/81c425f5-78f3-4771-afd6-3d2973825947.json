@@ -1,0 +1,24 @@
+{
+  "id": "81c425f5-78f3-4771-afd6-3d2973825947",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Can you assist me in transferring the data from LibreOffice Calc in the current sheet to a LibreOffice Writer table while preserving the original format as in calc file? Save the document as \"price.docx\" on the desktop.",
+  "source": "authors",
+  "config": [
+    "_download_setup(files=[{'path': '/home/user/Desktop/OSP_Envelope_Price-List_2023_5000.xlsx', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/81c425f5-78f3-4771-afd6-3d2973825947/OSP_Envelope_Price-List_2023_5000.xlsx'}])",
+    "_open_setup(path='/home/user/Desktop/OSP_Envelope_Price-List_2023_5000.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer",
+    "libreoffice_calc",
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='price.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; import time; pyautogui.hotkey(\"ctrl\", \"s\"); time.sleep(0.5);'])"
+    ],
+    "eval": "compare_docx_tables(get_vm_file(env, config={'path': '/home/user/Desktop/price.docx', 'dest': 'price.docx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/81c425f5-78f3-4771-afd6-3d2973825947/price.docx', 'dest': 'price_Gold.docx'}))"
+  },
+  "trajectory": "trajectories/81c425f5-78f3-4771-afd6-3d2973825947"
+}

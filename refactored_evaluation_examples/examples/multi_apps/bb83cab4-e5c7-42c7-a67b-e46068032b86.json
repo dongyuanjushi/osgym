@@ -1,0 +1,24 @@
+{
+  "id": "bb83cab4-e5c7-42c7-a67b-e46068032b86",
+  "snapshot": "libreoffice_impress",
+  "instruction": "I want to convert an Impress file into a document editable in Writer. Simply place all the text from Impress into \"script.docx\" on the Desktop, and I'll handle the reformatting. Thank you!",
+  "source": "authors",
+  "config": [
+    "_download_setup(files=[{'path': '/home/user/Desktop/Unlocking-the-Power-of-ChatGPT.pptx', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/bb83cab4-e5c7-42c7-a67b-e46068032b86/Unlocking-the-Power-of-ChatGPT.pptx'}])",
+    "_open_setup(path='/home/user/Desktop/Unlocking-the-Power-of-ChatGPT.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer",
+    "libreoffice_impress",
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='script.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; import time; pyautogui.hotkey(\"ctrl\", \"s\"); time.sleep(0.5);'])"
+    ],
+    "eval": "compare_docx_files(get_vm_file(env, config={'path': '/home/user/Desktop/script.docx', 'dest': 'script.docx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/bb83cab4-e5c7-42c7-a67b-e46068032b86/script.docx', 'dest': 'script_Gold.docx'}), ignore_blanks=True, ignore_order=True, content_only=True, delete_empty_lines=True)"
+  },
+  "trajectory": "trajectories/bb83cab4-e5c7-42c7-a67b-e46068032b86"
+}

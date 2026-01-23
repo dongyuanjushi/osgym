@@ -1,0 +1,22 @@
+{
+  "id": "2888b4e6-5b47-4b57-8bf5-c73827890774",
+  "snapshot": "chrome",
+  "instruction": "Show me all men's large-size short-sleeve shirts with a discount of 50% or more.",
+  "source": "test_task_1",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://www.macys.com/'])",
+    "_activate_window_setup(window_name='Google Chrome')"
+  ],
+  "trajectory": "trajectories/",
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "check_direct_json_object(get_url_path_parse(env, config={'goto_prefix': 'https://www.', 'parse_keys': ['mens_clothing', 'shirts', 'Men_regular_size_t', 'Price_discount_range', 'short_sleeve']}), rules={'expected': {'mens_clothing': True, 'shirts': True, 'Men_regular_size_t': 'L', 'Price_discount_range': '50_PERCENT_ off & more', 'short_sleeve': True}})"
+  },
+  "proxy": false,
+  "possibility_of_env_change": "medium",
+  "fixed_ip": false
+}

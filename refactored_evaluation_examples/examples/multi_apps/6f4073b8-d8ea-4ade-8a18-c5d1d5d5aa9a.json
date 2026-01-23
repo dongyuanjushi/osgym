@@ -1,0 +1,24 @@
+{
+  "id": "6f4073b8-d8ea-4ade-8a18-c5d1d5d5aa9a",
+  "snapshot": "multiapps",
+  "instruction": "I now want to count the meeting cities of the three machine learning conferences in the past ten years from 2013 to 2019(including 2013 and 2019). I have listed the names and years of the conferences in excel. Please fill in the vacant locations.",
+  "source": "author",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/6f4073b8-d8ea-4ade-8a18-c5d1d5d5aa9a/Conference.xlsx', 'path': '/home/user/Desktop/ConferenceCity.xlsx'}])",
+    "_open_setup(path='/home/user/Desktop/ConferenceCity.xlsx')"
+  ],
+  "related_apps": [
+    "calc",
+    "chrome",
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/6f4073b8-d8ea-4ade-8a18-c5d1d5d5aa9a/ConferenceCity%20Gold.xlsx', 'path': '/home/user/Desktop/ConferenceCity_Gold.xlsx'}])",
+      "_activate_window_setup(window_name='ConferenceCity.xlsx - LibreOffice Calc')",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; import time; pyautogui.hotkey(\"ctrl\", \"s\"); time.sleep(0.5);'])"
+    ],
+    "eval": "compare_conference_city_in_order(get_vm_file(env, config={'path': '/home/user/Desktop/ConferenceCity.xlsx', 'dest': 'ConferenceCity.xlsx'}), get_rule(env, config={'rules': {'expected': ['Scottsdale', 'Atlanta', ['Lake Tahoe', 'Stateline'], ['Banff', \"Alberta's Rockies\", 'Alberta\u2019s Rockies'], 'Beijing', ['Montreal', 'Montr\u00e9al'], 'San Diego', 'Lille', ['Montreal', 'Montr\u00e9al'], 'San Juan', ['New York', 'New York City', 'NYC'], 'Barcelona', 'Toulon', 'Sydney', ['Los Angeles', 'Long Beach', 'LA'], 'Vancouver', 'Stockholm', ['Montreal', 'Montr\u00e9al'], 'New Orleans', ['Los Angeles', 'Long Beach', 'LA'], 'Vancouver']}}))"
+  },
+  "trajectory": "trajectories/"
+}

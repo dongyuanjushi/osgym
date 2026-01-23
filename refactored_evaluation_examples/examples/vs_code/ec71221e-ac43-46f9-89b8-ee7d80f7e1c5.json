@@ -1,0 +1,24 @@
+{
+  "id": "ec71221e-ac43-46f9-89b8-ee7d80f7e1c5",
+  "snapshot": "vscode",
+  "instruction": "Please help me increase the indent of line 2 to line 10 by one tab.",
+  "source": "https://stackoverflow.com/questions/47903209/how-to-shift-a-block-of-code-left-right-by-one-space-in-vscode",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/vs_code/ec71221e-ac43-46f9-89b8-ee7d80f7e1c5/test.py', 'path': '/home/user/Desktop/test.py'}])",
+    "_launch_setup(command=['code', '/home/user/Desktop/test.py'])",
+    "_activate_window_setup(window_name='Visual Studio Code')"
+  ],
+  "related_apps": [
+    "vscode"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='test.py - Visual Studio Code')",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; import time; pyautogui.hotkey(\"ctrl\", \"s\"); time.sleep(0.5); '])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_text_file(get_vm_file(env, config={'path': '/home/user/Desktop/test.py', 'dest': 'test.py'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/vs_code/ec71221e-ac43-46f9-89b8-ee7d80f7e1c5/test_gold.py', 'dest': 'test_gold.py'}))"
+  },
+  "trajectory": "trajectories/"
+}

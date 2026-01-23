@@ -1,0 +1,19 @@
+{
+  "id": "2fe4b718-3bd7-46ec-bdce-b184f5653624",
+  "snapshot": "vlc",
+  "instruction": "Could you help me create an Animated GIF src_clip.gif from a video file using VLC and GIMP from the source of video \"src.mp4\" in the desktop, 5-second clip beginning at 00:03?",
+  "source": "https://www.maketecheasier.com/create-gif-from-video-gimp/",
+  "config": [
+    "_launch_setup(command=['gimp'])",
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2fe4b718-3bd7-46ec-bdce-b184f5653624/src.mp4', 'path': '/home/user/Desktop/src.mp4'}])",
+    "_launch_setup(command=['vlc'])"
+  ],
+  "related_apps": [
+    "vlc",
+    "gimp"
+  ],
+  "evaluator": {
+    "eval": "compare_images(get_vm_file(env, config={'path': '/home/user/Desktop/src_clip.gif', 'dest': 'src_clip.gif'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/2fe4b718-3bd7-46ec-bdce-b184f5653624/src_clip.gif', 'dest': 'src_clip_gold.gif'}))"
+  },
+  "trajectory": "trajectories/"
+}

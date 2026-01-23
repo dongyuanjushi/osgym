@@ -1,0 +1,25 @@
+{
+  "id": "734d6579-c07d-47a8-9ae2-13339795476b",
+  "snapshot": "gimp",
+  "instruction": "Could you fill the background layer with green color, leaving the object layer as is?",
+  "source": "https://www.youtube.com/watch?v=LX-S1CX1HUI",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/734d6579-c07d-47a8-9ae2-13339795476b/white_background_with_object.xcf', 'path': '/home/user/Desktop/white_background_with_object.xcf'}, {'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/734d6579-c07d-47a8-9ae2-13339795476b/white_background_with_object.png', 'path': '/home/user/Desktop/white_background_with_object.png'}])",
+    "_launch_setup(command=['gimp', '/home/user/Desktop/white_background_with_object.xcf'])"
+  ],
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['python3', '-c', 'import time; import pyautogui; time.sleep(1);pyautogui.hotkey([\"shift\", \"ctrl\", \"e\"]);'])",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python3', '-c', 'import time; import pyautogui; time.sleep(1);pyautogui.write(\"green_background_with_object\");time.sleep(1);pyautogui.press([\"enter\"]);'])",
+      "_sleep_setup(seconds=2)",
+      "_execute_setup(command=['python3', '-c', 'import pyautogui; pyautogui.press([\"enter\"]);'])",
+      "_sleep_setup(seconds=5)"
+    ],
+    "eval": "check_green_background(get_vm_file(env, config={'path': '/home/user/Desktop/green_background_with_object.png', 'dest': 'green_background_with_object.png'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/734d6579-c07d-47a8-9ae2-13339795476b/white_background_with_object.png', 'dest': 'white_background_with_object.png'}))"
+  },
+  "trajectory": "trajectories/"
+}

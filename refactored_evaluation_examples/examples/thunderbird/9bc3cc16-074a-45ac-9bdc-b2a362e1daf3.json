@@ -1,0 +1,21 @@
+{
+  "id": "9bc3cc16-074a-45ac-9bdc-b2a362e1daf3",
+  "snapshot": "thunderbird",
+  "instruction": "Could you help me back up all the email files in my inbox to ~/emails.bak? Please save them separately in eml format.",
+  "source": "https://www.quora.com/How-do-I-backup-email-files-in-Mozilla-Thunderbird",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/thunderbird/dd84e895-72fd-4023-a336-97689ded257c/thunderbird-profile.tar.gz', 'path': '/home/user/thunderbird-profile.tar.gz'}])",
+    "_execute_setup(command=['tar', '-xzv', '--recursive-unlink', '-f', '/home/user/thunderbird-profile.tar.gz', '-C', '/home/user/'])",
+    "_launch_setup(command=['/usr/bin/thunderbird'])"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_command_setup(command=['ls', '-R', '/home/user/emails.bak'], stdout='emails.bak.ls')"
+    ],
+    "eval": "check_list(get_cache_file(env, config={'path': 'emails.bak.ls'}), get_rule(env, config={'rules': {'expect': ['\u6b61\u8fce\u4f7f\u7528\u65b0\u7684 Outlook.com \u5e33\u6236.*\\\\.eml', 'A Test E-mail.*\\\\.eml']}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "dbbf4b99-2253-4b10-9274-45f246af2466",
+  "snapshot": "gimp",
+  "instruction": "Convert my new raw image into jpeg.",
+  "source": "https://www.makeuseof.com/tag/can-photoshop-gimp-cant/",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/dbbf4b99-2253-4b10-9274-45f246af2466/yicun.raw', 'path': '/home/user/Desktop/yicun.raw'}])",
+    "_launch_setup(command=['gimp', '/home/user/Desktop/yicun.raw'])"
+  ],
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "eval": "infeasible(get_(env, config={}))"
+  },
+  "trajectory": "trajectories/"
+}

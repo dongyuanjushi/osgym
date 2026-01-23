@@ -1,0 +1,17 @@
+{
+  "id": "dcbe20e8-647f-4f1d-8696-f1c5bbb570e3",
+  "snapshot": "vscode",
+  "instruction": "Please help me change the background of VS Code to the photo in Downloads.",
+  "source": "",
+  "config": [
+    "_launch_setup(command=['code'])",
+    "_activate_window_setup(window_name='Visual Studio Code')"
+  ],
+  "related_apps": [
+    "vscode"
+  ],
+  "evaluator": {
+    "eval": "infeasible(get_(env, config={}))"
+  },
+  "trajectory": "trajectories/"
+}

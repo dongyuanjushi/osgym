@@ -1,0 +1,26 @@
+{
+  "id": "c7c1e4c3-9e92-4eba-a4b8-689953975ea4",
+  "snapshot": "libreoffice_calc",
+  "instruction": "I am collecting the contact information of some professors and have their homepage links listed here. Assist me in completing the form by adding their respective email addresses.",
+  "source": "",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/c7c1e4c3-9e92-4eba-a4b8-689953975ea4/Professor_Contact.xlsx', 'path': '/home/user/Desktop/Professor_Contact.xlsx'}])",
+    "_open_setup(path='/home/user/Desktop/Professor_Contact.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc",
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='Professor_Contact.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/Desktop/Professor_Contact.xlsx', 'dest': 'Professor_Contact.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/c7c1e4c3-9e92-4eba-a4b8-689953975ea4/Professor_Contact_Gold.xlsx', 'dest': 'Professor_Contact_Gold.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
+  },
+  "trajectory": "trajectories/"
+}

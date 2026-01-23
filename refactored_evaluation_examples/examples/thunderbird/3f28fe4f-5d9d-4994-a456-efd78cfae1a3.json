@@ -1,0 +1,22 @@
+{
+  "id": "3f28fe4f-5d9d-4994-a456-efd78cfae1a3",
+  "snapshot": "thunderbird",
+  "instruction": "Set up a plain text signature for my email account in Thunderbird. The first line is my name \"Anonym\" and the second line is my affiliation \"XYZ Lab\".",
+  "source": "https://www.adsigner.com/user-manual/signatures/setup-email-client-thunderbird/#:~:text=is%20probably%20hidden.-,Right%20click%20on%20the%20empty%20space%20at%20the%20top%20of,signature%20from%20a%20file%20instead.",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/thunderbird/dd84e895-72fd-4023-a336-97689ded257c/thunderbird-profile.tar.gz', 'path': '/home/user/thunderbird-profile.tar.gz'}])",
+    "_execute_setup(command=['tar', '-xzv', '--recursive-unlink', '-f', '/home/user/thunderbird-profile.tar.gz', '-C', '/home/user/'])",
+    "_launch_setup(command=['/usr/bin/thunderbird'])"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_close_window_setup(window_name='Mail.thunderbird', strict=True, by_class=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_thunderbird_prefs(get_vm_file(env, config={'path': '/home/user/.thunderbird/t5q2a5hp.default-release/prefs.js', 'dest': 'thunder-prefs.js'}), get_rule(env, config={'rules': {'expect': {'mail.identity.id1.htmlSigText': {'method': 're.S', 'ref': 'Anonym\\\\nXYZ Lab'}}}}))"
+  },
+  "trajectory": "trajectories/6766f2b8-8a72-417f-a9e5-56fcaa735837"
+}

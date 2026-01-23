@@ -1,0 +1,20 @@
+{
+  "id": "20236825-b5df-46e7-89bf-62e1d640a897",
+  "snapshot": "vscode",
+  "instruction": "I am currently working on my algorithm practice using the document \"bubble_Sort_tutorial.docx.\" Please assist me in completing the 'bubbleSort' function within the 'bubbleSort.py' file on the Desktop and save the output as 'res.txt' on the Desktop.",
+  "source": "authors",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/20236825-b5df-46e7-89bf-62e1d640a897/bubbleSort.zip', 'path': '/home/user/Desktop/bubbleSort.zip'}, {'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/20236825-b5df-46e7-89bf-62e1d640a897/Bubble_Sort_tutorial.docx', 'path': '/home/user/Desktop/Bubble_Sort_tutorial.docx'}])",
+    "_execute_setup(command=['/bin/bash', '-c', 'unzip /home/user/Desktop/bubbleSort.zip -d /home/user/Desktop/ && rm -rf /home/user/Desktop/bubbleSort.zip'])",
+    "_open_setup(path='/home/user/Desktop/Bubble_Sort_tutorial.docx')"
+  ],
+  "related_apps": [
+    "vscode",
+    "libreoffice_writer",
+    "os"
+  ],
+  "evaluator": {
+    "eval": "compare_text_file(get_vm_file(env, config={'path': '/home/user/Desktop/res.txt', 'dest': 'res.txt'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/20236825-b5df-46e7-89bf-62e1d640a897/res.txt', 'dest': 'res_Gold.txt'}))"
+  },
+  "trajectory": "trajectories/20236825-b5df-46e7-89bf-62e1d640a897"
+}

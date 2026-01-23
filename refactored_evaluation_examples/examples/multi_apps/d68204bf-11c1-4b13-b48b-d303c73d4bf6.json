@@ -1,0 +1,18 @@
+{
+  "id": "d68204bf-11c1-4b13-b48b-d303c73d4bf6",
+  "snapshot": "gimp",
+  "instruction": "Divide my image vertically into three equal sections with command line. Then rearrange them in order with a gradient of warm tones, progressively becoming warmer from left to right as a new image \"rearranged.png\".",
+  "source": "",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/d68204bf-11c1-4b13-b48b-d303c73d4bf6/tilearray.png', 'path': '/home/user/Desktop/tilearray.png'}])",
+    "_execute_setup(command=['python', '-c', 'import pyautogui; import time; pyautogui.hotkey(\"ctrl\", \"alt\", \"t\"); time.sleep(0.5);'])"
+  ],
+  "related_apps": [
+    "gimp",
+    "os"
+  ],
+  "evaluator": {
+    "eval": "check_structure_sim(get_vm_file(env, config={'path': '/home/user/Desktop/rearranged.png', 'dest': 'rearranged.png'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/d68204bf-11c1-4b13-b48b-d303c73d4bf6/rearranged_gold.png', 'dest': 'rearranged_gold.png'}))"
+  },
+  "trajectory": "trajectories/"
+}

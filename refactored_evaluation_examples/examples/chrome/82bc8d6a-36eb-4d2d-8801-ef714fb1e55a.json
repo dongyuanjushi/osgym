@@ -1,0 +1,19 @@
+{
+  "id": "82bc8d6a-36eb-4d2d-8801-ef714fb1e55a",
+  "snapshot": "chrome",
+  "instruction": "On next Monday, look up a flight from Mumbai to Stockholm.",
+  "source": "test_task_1",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://www.qatarairways.com/en-hk/homepage.html'])",
+    "_activate_window_setup(window_name='Google Chrome')"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "check_direct_json_object(get_active_tab_url_parse(env, config={'goto_prefix': 'https://www.', 'parse_keys': ['fromStation', 'toStation', 'departing'], 'replace': {'departing': 'time'}}), get_rule_relativeTime())"
+  },
+  "trajectory": "trajectories/"
+}

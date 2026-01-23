@@ -1,0 +1,19 @@
+{
+  "id": "f79439ad-3ee8-4f99-a518-0eb60e5652b0",
+  "snapshot": "chrome",
+  "instruction": "Search for a one way flight from Dublin to Vienna on 10th next month for 2 adults.",
+  "source": "test_task_2",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://www.ryanair.com/gb/en'])",
+    "_activate_window_setup(window_name='Google Chrome')"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "check_direct_json_object(get_active_tab_url_parse(env, config={'goto_prefix': 'https://www.', 'parse_keys': ['originIata', 'destinationIata', 'tpAdults', 'tpTeens', 'tpChildren', 'tpStartDate', 'isReturn'], 'replace': {'tpStartDate': 'time'}}), get_rule_relativeTime())"
+  },
+  "trajectory": "trajectories/"
+}
