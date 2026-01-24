@@ -202,74 +202,78 @@ def save_json(data, output_file):
 def main():
     """Main function to run the sampling script."""
     # Set up paths
-    script_dir = Path(__file__).parent
-    input_file = script_dir / "test_no_gdrive.json"
-    train_output_file = script_dir / "train_128.json"
-    test_output_file = script_dir / "test_remaining.json"
-    examples_dir = script_dir / "examples"
+    # script_dir = Path(__file__).parent
+    # input_file = script_dir / "test_no_gdrive.json"
+    # train_output_file = script_dir / "train_128.json"
+    # test_output_file = script_dir / "test_remaining.json"
+    # examples_dir = script_dir / "examples"
 
-    # Parse command line arguments
-    seed = 42  # Default seed for reproducibility
-    train_count = 128  # Default training set size
+    # # Parse command line arguments
+    # seed = 42  # Default seed for reproducibility
+    # train_count = 128  # Default training set size
 
-    if len(sys.argv) > 1:
-        try:
-            seed = int(sys.argv[1])
-        except ValueError:
-            print(f"Warning: Invalid seed value '{sys.argv[1]}', using default seed 42.")
+    # if len(sys.argv) > 1:
+    #     try:
+    #         seed = int(sys.argv[1])
+    #     except ValueError:
+    #         print(f"Warning: Invalid seed value '{sys.argv[1]}', using default seed 42.")
 
-    if len(sys.argv) > 2:
-        try:
-            train_count = int(sys.argv[2])
-        except ValueError:
-            print(f"Warning: Invalid train count '{sys.argv[2]}', using default 128.")
+    # if len(sys.argv) > 2:
+    #     try:
+    #         train_count = int(sys.argv[2])
+    #     except ValueError:
+    #         print(f"Warning: Invalid train count '{sys.argv[2]}', using default 128.")
 
-    # Load original data
-    print(f"Loading tasks from: {input_file}")
-    with open(input_file, 'r') as f:
-        original_data = json.load(f)
+    # # Load original data
+    # print(f"Loading tasks from: {input_file}")
+    # with open(input_file, 'r') as f:
+    #     original_data = json.load(f)
 
-    # Calculate and display original distribution
-    orig_counts, orig_total = calculate_domain_counts(original_data)
-    print(f"\nOriginal distribution:")
-    print(f"  Total tasks: {orig_total}")
-    for domain in sorted(orig_counts.keys()):
-        count = orig_counts[domain]
-        pct = (count / orig_total) * 100
-        print(f"  {domain}: {count} tasks ({pct:.2f}%)")
+    # # Calculate and display original distribution
+    # orig_counts, orig_total = calculate_domain_counts(original_data)
+    # print(f"\nOriginal distribution:")
+    # print(f"  Total tasks: {orig_total}")
+    # for domain in sorted(orig_counts.keys()):
+    #     count = orig_counts[domain]
+    #     pct = (count / orig_total) * 100
+    #     print(f"  {domain}: {count} tasks ({pct:.2f}%)")
 
-    # Sample tasks (stratified)
-    print(f"\nSampling {train_count} tasks for training set (seed={seed})...")
-    train_data, test_data = sample_tasks_stratified(original_data, target_count=train_count, seed=seed)
+    # # Sample tasks (stratified)
+    # print(f"\nSampling {train_count} tasks for training set (seed={seed})...")
+    # train_data, test_data = sample_tasks_stratified(original_data, target_count=train_count, seed=seed)
 
-    # Print comparison
-    print_distribution_comparison(original_data, train_data, test_data)
+    # # Print comparison
+    # print_distribution_comparison(original_data, train_data, test_data)
 
-    # Load full task data and pack into lists
-    print(f"Loading full task data from: {examples_dir}")
+    # # Load full task data and pack into lists
+    # print(f"Loading full task data from: {examples_dir}")
 
-    train_tasks = pack_tasks_to_list(examples_dir, train_data)
-    test_tasks = pack_tasks_to_list(examples_dir, test_data)
+    # train_tasks = pack_tasks_to_list(examples_dir, train_data)
+    # test_tasks = pack_tasks_to_list(examples_dir, test_data)
 
-    # Save as JSON files (list of task configs)
-    print(f"Saving training dataset to: {train_output_file}")
-    save_json(train_tasks, train_output_file)
+    # # Save as JSON files (list of task configs)
+    # print(f"Saving training dataset to: {train_output_file}")
+    # save_json(train_tasks, train_output_file)
 
-    print(f"Saving test dataset to: {test_output_file}")
-    save_json(test_tasks, test_output_file)
+    # print(f"Saving test dataset to: {test_output_file}")
+    # save_json(test_tasks, test_output_file)
 
-    # Verify total counts
-    train_counts, train_total = calculate_domain_counts(train_data)
-    test_counts, test_total = calculate_domain_counts(test_data)
+    # # Verify total counts
+    # train_counts, train_total = calculate_domain_counts(train_data)
+    # test_counts, test_total = calculate_domain_counts(test_data)
 
-    print(f"\n✓ Successfully created train/test split")
-    print(f"✓ Training set: {train_total} tasks ({len(train_tasks)} task files loaded)")
-    print(f"✓ Test set: {test_total} tasks ({len(test_tasks)} task files loaded)")
-    print(f"✓ Train output: {train_output_file}")
-    print(f"✓ Test output: {test_output_file}")
-    print(f"\nUsage:")
-    print(f"  python sample_tasks.py [seed] [train_count]")
-    print(f"  Default: seed=42, train_count=128")
+    # print(f"\n✓ Successfully created train/test split")
+    # print(f"✓ Training set: {train_total} tasks ({len(train_tasks)} task files loaded)")
+    # print(f"✓ Test set: {test_total} tasks ({len(test_tasks)} task files loaded)")
+    # print(f"✓ Train output: {train_output_file}")
+    # print(f"✓ Test output: {test_output_file}")
+    # print(f"\nUsage:")
+    # print(f"  python sample_tasks.py [seed] [train_count]")
+    # print(f"  Default: seed=42, train_count=128")
+    
+    from datasets import load_dataset
+    dataset = load_dataset("json", data_files="no_gdrive_rl_train.jsonl")
+    print(dataset)
 
 
 if __name__ == "__main__":

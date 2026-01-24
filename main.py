@@ -14,7 +14,8 @@ from fastapi import FastAPI, Request, Query, responses, HTTPException, status
 from pydantic import BaseModel
 from typing import Any, Dict, List, Union
 
-os.environ["OSGYM_ALLOWED_IPS"] = "127.0.0.1"
+from dotenv import load_dotenv
+load_dotenv()
 
 #  Logger Configs {{{ # 
 logger = logging.getLogger()
@@ -50,7 +51,7 @@ logger.addHandler(sdebug_handler)
 #  }}} Logger Configs # 
 
 logger = logging.getLogger("desktopenv.main")
-available_vms: List[int] = list(range(2, -1, -1)) # at most 2 VMs for each worker
+available_vms: List[int] = list(range(32, -1, -1)) # at most 2 VMs for each worker
 active_vms: List[int] = []
 vm_map: Dict[str, Dict[str, Any]] = {}
 vm_lock = threading.Lock()
@@ -129,7 +130,7 @@ async def screenshot(vm_id: int = Query(..., alias="vmId")):
         obs = vm_env.render()
         logger.info(f"Taking screenshot for VM ID: {vm_id}")
         return {
-            "screenshot": base64.b64encode(obs),
+            "screenshot": base64.b64encode(obs["screenshot"]),
             "vm_id": vm_id,
         }
     except Exception as e:
@@ -139,8 +140,8 @@ async def screenshot(vm_id: int = Query(..., alias="vmId")):
 @app.post("/reset")
 async def reset(request: ResetRequest):
     try:
-        logger.info(f"Before reset, closing all VMs")
-        _release_vm("all")
+        # logger.info(f"Before reset, closing all VMs")
+        # _release_vm("all")
         vm_id = _get_available_vm(request.timeout)
         logger.info(f"vm_id: {vm_id}")
         task_config = request.task_config
@@ -173,7 +174,7 @@ async def step(request: StepRequest):
             _release_vm(vm_id)
         return {
             # "screenshot": base64.b64encode(obs["screenshot"]),
-            "screenshot": obs["screenshot"],
+            "screenshot": base64.b64encode(obs["screenshot"]),
             "is_finish": done,
             "reward": reward,
         }

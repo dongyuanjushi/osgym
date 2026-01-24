@@ -59,3 +59,4 @@ httptools
 librosa
 gymnasium
 filelock
+tldextract

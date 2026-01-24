@@ -21,8 +21,17 @@ class PythonController:
         self.retry_times = 3
         self.retry_interval = 5
         self.lock = threading.Lock()
-        self.keep_alive_thread = threading.Thread(target=self.keep_alive)
+        self._stop_event = threading.Event()  # Event to signal thread to stop
+        self.keep_alive_thread = threading.Thread(target=self.keep_alive, daemon=True)
         self.keep_alive_thread.start()
+
+    def stop(self):
+        """Stop the keep_alive thread gracefully."""
+        logger.info(f"Stopping PythonController for {self.vm_ip}")
+        self._stop_event.set()
+        # Wait for thread to finish (with timeout)
+        if self.keep_alive_thread.is_alive():
+            self.keep_alive_thread.join(timeout=5)
 
     def get_screenshot(self) -> Optional[bytes]:
         """
@@ -144,15 +153,31 @@ class PythonController:
 
     def keep_alive(self):
         """
-        Keeps the server alive.
+        Keeps the server alive. Stops when _stop_event is set.
         """
-        time.sleep(20)
-        while True:
-            with self.lock:
-                logger.info("Keeping server alive by moving the mouse")
-                self.execute_python_command("pyautogui.moveRel(1, 1, duration=0)", slient=True)
-                self.execute_python_command("pyautogui.moveRel(-1, 0, duration=0)", slient=True)
-            time.sleep(20)
+        # Initial wait, but check stop event
+        for _ in range(20):
+            if self._stop_event.is_set():
+                logger.info("Keep alive thread stopping (during initial wait)")
+                return
+            time.sleep(1)
+
+        while not self._stop_event.is_set():
+            try:
+                with self.lock:
+                    if self._stop_event.is_set():
+                        break
+                    logger.info("Keeping server alive by moving the mouse")
+                    self.execute_python_command("pyautogui.moveRel(1, 1, duration=0)", slient=True)
+                    self.execute_python_command("pyautogui.moveRel(-1, 0, duration=0)", slient=True)
+            except Exception as e:
+                logger.warning(f"Keep alive failed: {e}")
+            # Sleep in small increments to check stop event frequently
+            for _ in range(20):
+                if self._stop_event.is_set():
+                    break
+                time.sleep(1)
+        logger.info("Keep alive thread stopped")
 
     def execute_action(self, action):
         """

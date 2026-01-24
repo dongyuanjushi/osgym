@@ -11,4 +11,3 @@ bk/
 venv/
 cache/
 vm_cache
-docker_vm_data/
