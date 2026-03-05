@@ -9,14 +9,11 @@
     "_chrome_open_tabs_setup(urls_to_open=['https://www.apple.com/'])",
     "_activate_window_setup(window_name='Google Chrome')"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "chrome"
   ],
   "evaluator": {
-    "eval": "check_direct_json_object(get_active_tab_url_parse(env, config={'goto_prefix': 'https://www.', 'parse_keys': ['modelList'], 'split_list': True}), rules={'expected': {'modelList': ['iphone-15-pro-max', 'iphone-14-pro-max', 'iphone-13-pro-max']}, 'ignore_list_order': True})"
+    "eval": "check_direct_json_object(get_active_tab_url_parse(env, config={'goto_prefix': 'https://www.', 'parse_keys': ['modelList'], 'split_list': True}), get_rule(env, config={'rules': {'expected': {'modelList': ['iphone-15-pro-max', 'iphone-14-pro-max', 'iphone-13-pro-max']}, 'ignore_list_order': True}}))"
   },
-  "proxy": true,
-  "possibility_of_env_change": "medium",
-  "fixed_ip": false
+  "trajectory": "trajectories/"
 }

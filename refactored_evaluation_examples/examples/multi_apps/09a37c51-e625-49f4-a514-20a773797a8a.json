@@ -4,20 +4,16 @@
   "instruction": "I've received a request from my friend who asked for assistance in editing an image. The document with the requirements and the picture to be adjusted are on the Desktop. Please make the necessary modifications to the image as his instructions and save the edited picture as \"pic.jpg\" on the Desktop. Thank you!",
   "source": "authors",
   "config": [
-    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/09a37c51-e625-49f4-a514-20a773797a8a/requirement.docx', path='/home/user/Desktop/requirment.docx')",
-    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/09a37c51-e625-49f4-a514-20a773797a8a/ChMkKV8wsR6IBfEtABYfc0Tgu9cAAA1lQHO_78AFh-L733.jpg', path='/home/user/Desktop/ChMkKV8wsR6IBfEtABYfc0Tgu9cAAA1lQHO_78AFh-L733.jpg')",
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/09a37c51-e625-49f4-a514-20a773797a8a/requirement.docx', 'path': '/home/user/Desktop/requirment.docx'}, {'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/09a37c51-e625-49f4-a514-20a773797a8a/ChMkKV8wsR6IBfEtABYfc0Tgu9cAAA1lQHO_78AFh-L733.jpg', 'path': '/home/user/Desktop/ChMkKV8wsR6IBfEtABYfc0Tgu9cAAA1lQHO_78AFh-L733.jpg'}])",
     "_open_setup(path='/home/user/Desktop/requirment.docx')"
   ],
-  "trajectory": "trajectories/09a37c51-e625-49f4-a514-20a773797a8a",
   "related_apps": [
     "libreoffice_writer",
     "gimp",
     "os"
   ],
   "evaluator": {
-    "eval": "compare_images(get_vm_file(env, path='/home/user/Desktop/pic.jpg'), get_cloud_file(env, path='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/09a37c51-e625-49f4-a514-20a773797a8a/pic.jpg'))"
+    "eval": "compare_images(get_vm_file(env, config={'path': '/home/user/Desktop/pic.jpg', 'dest': 'pic.jpg'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/09a37c51-e625-49f4-a514-20a773797a8a/pic.jpg', 'dest': 'pic_Gold.jpg'}))"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/09a37c51-e625-49f4-a514-20a773797a8a"
 }

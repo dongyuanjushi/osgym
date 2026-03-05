@@ -7,22 +7,19 @@
     "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/e2dd0213-26db-4349-abe5-d5667bfd725c/orange_background.xcf', 'path': '/home/user/Desktop/orange_background.xcf'}])",
     "_launch_setup(command=['gimp', '/home/user/Desktop/orange_background.xcf'])"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "gimp"
   ],
   "evaluator": {
     "postconfig": [
-      "_execute_setup(command=['python3', '-c', \"import pyautogui; pyautogui.hotkey(['shift', 'ctrl', 'e']);\"])",
+      "_execute_setup(command=['python3', '-c', 'import pyautogui; pyautogui.hotkey([\"shift\", \"ctrl\", \"e\"]);'])",
       "_sleep_setup(seconds=0.5)",
-      "_execute_setup(command=['python3', '-c', \"import time; import pyautogui; pyautogui.write('leftside_textbox');time.sleep(1);pyautogui.press(['enter']);\"])",
+      "_execute_setup(command=['python3', '-c', 'import time; import pyautogui; pyautogui.write(\"leftside_textbox\");time.sleep(1);pyautogui.press([\"enter\"]);'])",
       "_sleep_setup(seconds=2)",
-      "_execute_setup(command=['python3', '-c', \"import pyautogui; pyautogui.press(['enter']);\"])",
+      "_execute_setup(command=['python3', '-c', 'import pyautogui; pyautogui.press([\"enter\"]);'])",
       "_sleep_setup(seconds=5)"
     ],
     "eval": "check_textbox_on_leftside(get_vm_file(env, config={'path': '/home/user/Desktop/leftside_textbox.png', 'dest': 'leftside_textbox.png'}))"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/"
 }

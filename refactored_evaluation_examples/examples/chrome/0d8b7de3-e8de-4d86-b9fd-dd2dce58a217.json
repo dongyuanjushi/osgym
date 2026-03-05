@@ -9,14 +9,11 @@
     "_chrome_open_tabs_setup(urls_to_open=['https://drugs.com'])",
     "_activate_window_setup(window_name='Google Chrome')"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "chrome"
   ],
   "evaluator": {
-    "eval": "is_expected_active_tab(get_active_url_from_accessTree(env, config={'goto_prefix': 'https://www.'}), rule={'type': 'url', 'url': 'https://www.drugs.com/npc/'}) or is_expected_active_tab(get_active_url_from_accessTree(env, config={'goto_prefix': 'https://www.'}), rule={'type': 'url', 'url': 'https://www.drugs.com/npp/'})"
+    "eval": "is_expected_active_tab(get_active_url_from_accessTree(env, config={'goto_prefix': 'https://www.'}), get_rule(env, config={'rules': {'type': 'url', 'url': 'https://www.drugs.com/npc/'}})) or is_expected_active_tab(get_active_url_from_accessTree(env, config={'goto_prefix': 'https://www.'}), get_rule(env, config={'rules': {'type': 'url', 'url': 'https://www.drugs.com/npp/'}}))"
   },
-  "proxy": true,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/"
 }

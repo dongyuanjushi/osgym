@@ -7,7 +7,6 @@
     "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/4188d3a4-077d-46b7-9c86-23e1a036f6c1/Freeze_row_column2.xlsx', 'path': '/home/user/Freeze_row_column.xlsx'}])",
     "_open_setup(path='/home/user/Freeze_row_column.xlsx')"
   ],
-  "trajectory": "trajectories/4188d3a4-077d-46b7-9c86-23e1a036f6c1",
   "related_apps": [
     "libreoffice_calc"
   ],
@@ -15,12 +14,10 @@
     "postconfig": [
       "_activate_window_setup(window_name='Freeze_row_column.xlsx - LibreOffice Calc', strict=True)",
       "_sleep_setup(seconds=0.5)",
-      "_execute_setup(command=['python', '-c', \"import pyautogui; pyautogui.hotkey('ctrl', 's');\"])",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
       "_sleep_setup(seconds=0.5)"
     ],
-    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/Freeze_row_column.xlsx', 'dest': 'Freeze_row_column.xlsx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/4188d3a4-077d-46b7-9c86-23e1a036f6c1/Freeze_row_column2_gold.xlsx', 'dest': 'Freeze_row_column_gold.xlsx'}), rules=[{'type': 'freeze', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}, {'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/Freeze_row_column.xlsx', 'dest': 'Freeze_row_column.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/4188d3a4-077d-46b7-9c86-23e1a036f6c1/Freeze_row_column2_gold.xlsx', 'dest': 'Freeze_row_column_gold.xlsx'}), rules=[{'type': 'freeze', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}, {'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/4188d3a4-077d-46b7-9c86-23e1a036f6c1"
 }

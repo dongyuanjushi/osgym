@@ -7,9 +7,8 @@
     "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/550ce7e7-747b-495f-b122-acdc4d0b8e54/New_Club_Spring_2018_Training.data', 'path': '/home/user/Desktop/New_Club_Spring_2018_Training.pptx'}])",
     "_open_setup(path='/home/user/Desktop/New_Club_Spring_2018_Training.pptx')",
     "_sleep_setup(seconds=0.5)",
-    "_execute_setup(command=['python', '-c', 'import pyautogui; import time;  time.sleep(4); pyautogui.click(170, 250); time.sleep(1);pyautogui.press(\\'down\\'); time.sleep(1); pyautogui.press(\\'down\\'); time.sleep(1); pyautogui.press(\\'down\\'); time.sleep(1); pyautogui.press(\\'down\\'); time.sleep(1); '])"
+    "_execute_setup(command=['python', '-c', \"import pyautogui; import time;  time.sleep(4); pyautogui.click(170, 250); time.sleep(1);pyautogui.press('down'); time.sleep(1); pyautogui.press('down'); time.sleep(1); pyautogui.press('down'); time.sleep(1); pyautogui.press('down'); time.sleep(1); \"])"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "libreoffice_impress"
   ],
@@ -20,9 +19,7 @@
       "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
       "_sleep_setup(seconds=0.5)"
     ],
-    "eval": "compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/New_Club_Spring_2018_Training.pptx', 'dest': 'New_Club_Spring_2018_Training.pptx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/550ce7e7-747b-495f-b122-acdc4d0b8e54/New_Club_Spring_2018_Training_with_strike.data', 'dest': 'New_Club_Spring_2018_Training_Gold.pptx'})) or compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/New_Club_Spring_2018_Training.pptx', 'dest': 'New_Club_Spring_2018_Training.pptx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/550ce7e7-747b-495f-b122-acdc4d0b8e54/New_Club_Spring_2018_Training_Gold_all_fonts_1.pptx', 'dest': 'New_Club_Spring_2018_Training_Gold_all_fonts_1.pptx'}))"
+    "eval": "compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/New_Club_Spring_2018_Training.pptx', 'dest': 'New_Club_Spring_2018_Training.pptx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/550ce7e7-747b-495f-b122-acdc4d0b8e54/New_Club_Spring_2018_Training_with_strike.data', 'dest': 'New_Club_Spring_2018_Training_Gold.pptx'})) or compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/New_Club_Spring_2018_Training.pptx', 'dest': 'New_Club_Spring_2018_Training.pptx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/550ce7e7-747b-495f-b122-acdc4d0b8e54/New_Club_Spring_2018_Training_Gold_all_fonts_1.pptx', 'dest': 'New_Club_Spring_2018_Training_Gold_all_fonts_1.pptx'}))"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/"
 }

@@ -7,7 +7,6 @@
     "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/0b17a146-2934-46c7-8727-73ff6b6483e8/H2O_Factsheet_WA.docx', 'path': '/home/user/Desktop/H2O_Factsheet_WA.docx'}])",
     "_open_setup(path='/home/user/Desktop/H2O_Factsheet_WA.docx')"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "libreoffice_writer"
   ],
@@ -17,9 +16,7 @@
       "_sleep_setup(seconds=0.5)",
       "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); \"])"
     ],
-    "eval": "compare_docx_files(get_vm_file(env, config={'path': '/home/user/Desktop/H2O_Factsheet_WA.docx', 'dest': 'H2O_Factsheet_WA.docx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/0b17a146-2934-46c7-8727-73ff6b6483e8/H2O_Factsheet_WA_Gold.docx', 'dest': 'H2O_Factsheet_WA_Gold.docx'})) and compare_subscript_contains(get_vm_file(env, config={'path': '/home/user/Desktop/H2O_Factsheet_WA.docx', 'dest': 'H2O_Factsheet_WA.docx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/0b17a146-2934-46c7-8727-73ff6b6483e8/H2O_Factsheet_WA_Gold.docx', 'dest': 'H2O_Factsheet_WA_Gold.docx'}))"
+    "eval": "compare_docx_files(get_vm_file(env, config={'path': '/home/user/Desktop/H2O_Factsheet_WA.docx', 'dest': 'H2O_Factsheet_WA.docx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/0b17a146-2934-46c7-8727-73ff6b6483e8/H2O_Factsheet_WA_Gold.docx', 'dest': 'H2O_Factsheet_WA_Gold.docx'})) and compare_subscript_contains(get_vm_file(env, config={'path': '/home/user/Desktop/H2O_Factsheet_WA.docx', 'dest': 'H2O_Factsheet_WA.docx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/0b17a146-2934-46c7-8727-73ff6b6483e8/H2O_Factsheet_WA_Gold.docx', 'dest': 'H2O_Factsheet_WA_Gold.docx'}))"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/"
 }

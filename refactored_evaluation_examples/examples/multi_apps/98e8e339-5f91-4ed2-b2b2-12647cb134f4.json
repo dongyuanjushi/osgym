@@ -4,19 +4,16 @@
   "instruction": "Merge the contents of all .txt files from your vscode project into a single document \"concat.docx\" on Desktop with libreoffice writer. No merging separator is needed. Ensure to set the overall font size of the document to 10.",
   "source": "",
   "config": [
-    "_download_setup(url='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/98e8e339-5f91-4ed2-b2b2-12647cb134f4/doc_proc.zip', path='/home/user/Desktop/doc_proc.zip')",
-    "_execute_setup(command=\"mkdir -p /home/user/Desktop/doc_proc/; unzip /home/user/Desktop/doc_proc.zip -d /home/user/Desktop/doc_proc/\")",
-    "_launch_setup(command=[\"code\", \"-g\", \"/home/user/Desktop/doc_proc/\"])"
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/98e8e339-5f91-4ed2-b2b2-12647cb134f4/doc_proc.zip', 'path': '/home/user/Desktop/doc_proc.zip'}])",
+    "_command_setup(command='mkdir -p /home/user/Desktop/doc_proc/; unzip /home/user/Desktop/doc_proc.zip -d /home/user/Desktop/doc_proc/', shell=True)",
+    "_launch_setup(command=['code', '-g', '/home/user/Desktop/doc_proc/'])"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "vs_code",
     "libreoffice_writer"
   ],
   "evaluator": {
-    "eval": "compare_docx_files(get_vm_file(env, path='/home/user/Desktop/concat.docx'), get_cloud_file(env, path='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/98e8e339-5f91-4ed2-b2b2-12647cb134f4/concat_gold.docx'))"
+    "eval": "compare_docx_files(get_vm_file(env, config={'path': '/home/user/Desktop/concat.docx', 'dest': 'concat.docx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/98e8e339-5f91-4ed2-b2b2-12647cb134f4/concat_gold.docx', 'dest': 'concat_gold.docx'}))"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/"
 }

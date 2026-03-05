@@ -9,14 +9,11 @@
     "_chrome_open_tabs_setup(urls_to_open=['https://www.macys.com/'])",
     "_activate_window_setup(window_name='Google Chrome')"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "chrome"
   ],
   "evaluator": {
-    "eval": "check_direct_json_object(get_url_path_parse(env, config={'goto_prefix': 'https://www.', 'parse_keys': ['mens_clothing', 'shirts', 'Men_regular_size_t', 'Price_discount_range', 'short_sleeve']}), rules={'expected': {'mens_clothing': True, 'shirts': True, 'Men_regular_size_t': 'L', 'Price_discount_range': '50_PERCENT_ off & more', 'short_sleeve': True}})"
+    "eval": "check_direct_json_object(get_url_path_parse(env, config={'goto_prefix': 'https://www.', 'parse_keys': ['mens_clothing', 'shirts', 'Men_regular_size_t', 'Price_discount_range', 'short_sleeve']}), get_rule(env, config={'rules': {'expected': {'mens_clothing': True, 'shirts': True, 'Men_regular_size_t': 'L', 'Price_discount_range': '50_PERCENT_ off & more', 'short_sleeve': True}}}))"
   },
-  "proxy": false,
-  "possibility_of_env_change": "medium",
-  "fixed_ip": false
+  "trajectory": "trajectories/"
 }

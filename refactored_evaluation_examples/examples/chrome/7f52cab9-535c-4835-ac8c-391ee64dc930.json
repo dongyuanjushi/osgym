@@ -1,0 +1,19 @@
+{
+  "id": "7f52cab9-535c-4835-ac8c-391ee64dc930",
+  "snapshot": "chrome",
+  "instruction": "Create a list of drip coffee makers that are on sale and within $25-60 and have a black finish.",
+  "source": "test_task_1",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://shopping.google.com/'])",
+    "_activate_window_setup(window_name='Google Chrome')"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "check_direct_json_object(get_active_tab_url_parse(env, config={'goto_prefix': 'https://www.', 'parse_keys': ['q']}), get_rule(env, config={'rules': {'expected': {'q': 'drip coffee maker'}, 'expect_in_result': True}})) and check_direct_json_object(get_active_tab_html_parse(env, config={'goto_prefix': 'https://www.', 'category': 'class', 'class_multiObject_search_exist': {'fT28tf': ['Black', '$25 - $60', 'On sale', 'is_other_exist']}}), get_rule(env, config={'rules': {'expected': {'Black': True, '$25 - $60': True, 'On sale': True, 'is_other_exist': False}}}))"
+  },
+  "trajectory": "trajectories/"
+}

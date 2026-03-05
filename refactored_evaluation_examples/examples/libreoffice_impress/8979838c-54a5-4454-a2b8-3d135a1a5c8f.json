@@ -7,7 +7,6 @@
     "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/8979838c-54a5-4454-a2b8-3d135a1a5c8f/186_3.pptx', 'path': '/home/user/Desktop/186_3.pptx'}])",
     "_open_setup(path='/home/user/Desktop/186_3.pptx')"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "libreoffice_impress"
   ],
@@ -18,9 +17,7 @@
       "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
       "_sleep_setup(seconds=0.5)"
     ],
-    "eval": "compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/186_3.pptx', 'dest': '186_3.pptx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/8979838c-54a5-4454-a2b8-3d135a1a5c8f/186_3_Gold.pptx', 'dest': '186_3_Gold.pptx'}))"
+    "eval": "compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/186_3.pptx', 'dest': '186_3.pptx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/8979838c-54a5-4454-a2b8-3d135a1a5c8f/186_3_Gold.pptx', 'dest': '186_3_Gold.pptx'}))"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/"
 }

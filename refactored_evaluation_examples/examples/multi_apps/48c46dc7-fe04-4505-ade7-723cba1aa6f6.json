@@ -1,0 +1,26 @@
+{
+  "id": "48c46dc7-fe04-4505-ade7-723cba1aa6f6",
+  "snapshot": "chrome",
+  "instruction": "Help me to automatically set up my work space. To be specific, open project directory of OSWorld in terminal and file manager, then open github homepage and the online document of Python in chrome browser.",
+  "source": "authors",
+  "config": [
+    "_execute_setup(command=['mkdir', '-p', '/home/user/Documents/Finance/receipts', '/home/user/Documents/Projects/OSWorld', '/home/user/.local/share/applications'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_execute_setup(command=['cp', '/usr/share/applications/google-chrome.desktop', '/home/user/.local/share/applications'])",
+    "_execute_setup(command=['sed', '-i.bak', '-e', 's#Exec=/usr/bin/google-chrome-stable#& --remote-debugging-port=1337#g', '/home/user/.local/share/applications/google-chrome.desktop'])",
+    "_execute_setup(command=['update-desktop-database'])",
+    "_download_setup(files=[{'path': '/home/user/Documents/Finance/receipts/aws-invoice-2308.pdf', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/48c46dc7-fe04-4505-ade7-723cba1aa6f6/invoice0123456789-2308.pdf'}, {'path': '/home/user/Documents/Finance/receipts/aws-invoice-2309.pdf', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/48c46dc7-fe04-4505-ade7-723cba1aa6f6/invoice0123456789-2309.pdf'}, {'path': '/home/user/Documents/Finance/receipts/aws-invoice-2310.pdf', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/48c46dc7-fe04-4505-ade7-723cba1aa6f6/invoice0123456789-2310.pdf'}, {'path': '/home/user/Documents/Finance/receipts/aws-invoice-2311.pdf', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/48c46dc7-fe04-4505-ade7-723cba1aa6f6/invoice0123456789-2311.pdf'}, {'path': '/home/user/Documents/Finance/receipts/aws-invoice-2312.pdf', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/48c46dc7-fe04-4505-ade7-723cba1aa6f6/invoice0123456789-2312.pdf'}, {'path': '/home/user/Documents/Finance/receipts/X-receipt-2312.pdf', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/48c46dc7-fe04-4505-ade7-723cba1aa6f6/Receipt-0123-4567.pdf'}, {'path': '/home/user/Documents/Finance/tally_book.xlsx', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/48c46dc7-fe04-4505-ade7-723cba1aa6f6/tally_book.xlsx'}, {'path': '/home/user/.projects.tar.xz', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/48c46dc7-fe04-4505-ade7-723cba1aa6f6/projects.tar.xz'}])",
+    "_execute_setup(command=['tar', '-xJvf', '/home/user/.projects.tar.xz', '-C', '/home/user/Documents/Projects/OSWorld'])"
+  ],
+  "related_apps": [
+    "chrome",
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['wmctrl', '-lx'], stdout='wmctrl.out')"
+    ],
+    "eval": "check_list(get_cache_file(env, config={'path': 'wmctrl.out'}), get_rule(env, config={'rules': {'expect': ['\\\\borg\\\\.gnome\\\\.Nautilus\\\\.Org\\\\.gnome\\\\.Nautilus\\\\b.*\\\\bOSWorld\\\\b', 'gnome-terminal-server\\\\.Gnome-terminal\\\\b.*~/Documents/Projects/OSWorld\\\\b']}})) and is_expected_tabs(get_open_tabs_info(env, config={}), get_rule(env, config={'rules': {'type': 'url', 'urls': ['https://github.com', 'https://docs.python.org/3/']}}))"
+  },
+  "trajectory": "trajectories/48c46dc7-fe04-4505-ade7-723cba1aa6f6"
+}

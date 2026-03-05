@@ -9,14 +9,11 @@
     "_chrome_open_tabs_setup(urls_to_open=['https://www.dota2.com/home', 'https://store.steampowered.com'])",
     "_activate_window_setup(window_name='Google Chrome')"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "chrome"
   ],
   "evaluator": {
-    "eval": "is_added_to_steam_cart(get_page_info(env, config={'url': 'https://store.steampowered.com/cart/'}), rule={'items': ['The Dota 2 Official Soundtrack']})"
+    "eval": "is_added_to_steam_cart(get_page_info(env, config={'url': 'https://store.steampowered.com/cart/'}), get_rule(env, config={'rules': {'items': ['The Dota 2 Official Soundtrack']}}))"
   },
-  "proxy": true,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/"
 }

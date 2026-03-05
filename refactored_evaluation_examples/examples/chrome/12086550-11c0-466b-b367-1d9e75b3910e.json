@@ -7,14 +7,11 @@
     "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
     "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "chrome"
   ],
   "evaluator": {
-    "eval": "is_expected_active_tab_approximate(get_active_url_from_accessTree(env, config={'goto_prefix': ''}), rule={'type': 'url', 'url': 'chrome://password-manager/passwords'})"
+    "eval": "is_expected_active_tab_approximate(get_active_url_from_accessTree(env, config={'goto_prefix': ''}), get_rule(env, config={'rules': {'type': 'url', 'url': 'chrome://password-manager/passwords'}}))"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/"
 }

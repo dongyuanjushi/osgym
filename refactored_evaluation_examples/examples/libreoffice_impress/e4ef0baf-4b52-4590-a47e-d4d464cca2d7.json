@@ -7,7 +7,6 @@
     "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/e4ef0baf-4b52-4590-a47e-d4d464cca2d7/42_2.pptx', 'path': '/home/user/Desktop/42_2.pptx'}])",
     "_open_setup(path='/home/user/Desktop/42_2.pptx')"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "libreoffice_impress"
   ],
@@ -18,9 +17,7 @@
       "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
       "_sleep_setup(seconds=0.5)"
     ],
-    "eval": "compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/42_2.pptx', 'dest': '42_2.pptx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/e4ef0baf-4b52-4590-a47e-d4d464cca2d7/42_2_Gold.pptx', 'dest': '42_2_Gold.pptx'})) or compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/42_2.pptx', 'dest': '42_2.pptx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/e4ef0baf-4b52-4590-a47e-d4d464cca2d7/42_2_Gold_all_fonts.pptx', 'dest': '42_2_Gold_all_fonts.pptx'}))"
+    "eval": "compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/42_2.pptx', 'dest': '42_2.pptx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/e4ef0baf-4b52-4590-a47e-d4d464cca2d7/42_2_Gold.pptx', 'dest': '42_2_Gold.pptx'})) or compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/42_2.pptx', 'dest': '42_2.pptx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/e4ef0baf-4b52-4590-a47e-d4d464cca2d7/42_2_Gold_all_fonts.pptx', 'dest': '42_2_Gold_all_fonts.pptx'}))"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/"
 }

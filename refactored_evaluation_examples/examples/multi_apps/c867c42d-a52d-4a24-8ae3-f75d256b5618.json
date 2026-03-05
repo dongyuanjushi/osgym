@@ -6,18 +6,15 @@
   "config": [
     "_launch_setup(command=['libreoffice', '--calc'])",
     "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/c867c42d-a52d-4a24-8ae3-f75d256b5618/thunderbird.profile.tar.gz', 'path': '/home/user/thunderbird-profile.tar.gz'}])",
-    "_execute_setup(command=\"tar --recursive-unlink -xz -f /home/user/thunderbird-profile.tar.gz -C /home/user/\")",
+    "_execute_setup(command=['tar', '--recursive-unlink', '-xz', '-f', '/home/user/thunderbird-profile.tar.gz', '-C', '/home/user/'])",
     "_launch_setup(command=['/usr/bin/thunderbird'])"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "thunderbird",
     "libreoffice_calc"
   ],
   "evaluator": {
-    "eval": "compare_csv(get_vm_file(env, path='/home/user/Desktop/contacts.csv'), get_cloud_file(env, path='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/c867c42d-a52d-4a24-8ae3-f75d256b5618/contacts.csv')) and compare_table(get_vm_file(env, path='/home/user/Desktop/contacts.xlsx'), get_cloud_file(env, path='https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/c867c42d-a52d-4a24-8ae3-f75d256b5618/contacts.xlsx'), rules=[{'type': 'sheet_data', 'sheet_idx0': 'RI0', 'sheet_idx1': 'EI0'}])"
+    "eval": "compare_csv(get_vm_file(env, config={'path': '/home/user/Desktop/contacts.csv', 'dest': 'contacts.csv'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/c867c42d-a52d-4a24-8ae3-f75d256b5618/contacts.csv', 'dest': 'contacts_gold.csv'})) and compare_table(get_vm_file(env, config={'path': '/home/user/Desktop/contacts.xlsx', 'dest': 'contacts.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/c867c42d-a52d-4a24-8ae3-f75d256b5618/contacts.xlsx', 'dest': 'contacts_gold.xlsx'}))"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/"
 }

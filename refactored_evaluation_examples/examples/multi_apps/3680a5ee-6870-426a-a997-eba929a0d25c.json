@@ -1,0 +1,18 @@
+{
+  "id": "3680a5ee-6870-426a-a997-eba929a0d25c",
+  "snapshot": "libreoffice_calc",
+  "instruction": "I have file1.xlsx and file2.ods on my Desktop, each containing a single column. Using only the command line, help me merge these two columns into a single column by concatenating the strings from both rows, save the result as ~/Desktop/output.csv, and open it in LibreOffice Calc from the terminal",
+  "source": "https://unix.stackexchange.com/questions/510850/how-to-open-calc-from-terminal-and-insert-files",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/3680a5ee-6870-426a-a997-eba929a0d25c/file1.xlsx', 'path': '/home/user/Desktop/file1.xlsx'}, {'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/3680a5ee-6870-426a-a997-eba929a0d25c/file2.ods', 'path': '/home/user/Desktop/file2.ods'}])",
+    "_execute_setup(command=\"export DBUS_SESSION_BUS_ADDRESS='unix:path=/run/user/1000/bus'\\ngnome-terminal --maximize --working-directory=/home/user/Desktop\", shell=True)"
+  ],
+  "related_apps": [
+    "libreoffice_calc",
+    "terminal"
+  ],
+  "evaluator": {
+    "eval": "check_include_exclude(get_vm_command_line(env, config={'command': ['/bin/bash', '-c', 'output=$(ps aux | grep \"[s]office\" | awk \\'{print $7}\\' | grep -E \"pts/|tty\"); if [ -z \"$output\" ]; then echo \"use no terminal\"; else echo \"use terminal\"; fi;']}), get_rule(env, config={'rules': {'include': ['use terminal']}})) and compare_csv(get_vm_file(env, config={'path': '/home/user/Desktop/output.csv', 'dest': 'output.csv'}), get_cloud_file(env, config={'multi': True, 'path': ['https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/3680a5ee-6870-426a-a997-eba929a0d25c/output.csv', 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/3680a5ee-6870-426a-a997-eba929a0d25c/output_gold2.csv', 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/3680a5ee-6870-426a-a997-eba929a0d25c/output_gold3.csv'], 'dest': ['output_gold.csv', 'output_gold2.csv', 'output_gold3.csv'], 'gives': [0, 1, 2]}))"
+  },
+  "trajectory": "trajectories/"
+}

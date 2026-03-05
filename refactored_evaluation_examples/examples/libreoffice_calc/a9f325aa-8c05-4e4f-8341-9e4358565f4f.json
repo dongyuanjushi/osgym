@@ -7,7 +7,6 @@
     "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/a9f325aa-8c05-4e4f-8341-9e4358565f4f/Movie_titles_garbage_clean.xlsx', 'path': '/home/user/Movie_title_garbage_clean.xlsx'}])",
     "_open_setup(path='/home/user/Movie_title_garbage_clean.xlsx')"
   ],
-  "trajectory": "trajectories/a9f325aa-8c05-4e4f-8341-9e4358565f4f",
   "related_apps": [
     "libreoffice calc"
   ],
@@ -15,12 +14,10 @@
     "postconfig": [
       "_activate_window_setup(window_name='Movie_title_garbage_clean.xlsx - LibreOffice Calc', strict=True)",
       "_sleep_setup(seconds=0.5)",
-      "_execute_setup(command=['python', '-c', \"import pyautogui; pyautogui.hotkey('ctrl', 's');\"])",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
       "_sleep_setup(seconds=0.5)"
     ],
-    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/Movie_title_garbage_clean.xlsx', 'dest': 'Movie_title_garbage_clean.xlsx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/a9f325aa-8c05-4e4f-8341-9e4358565f4f/Movie_titles_garbage_clean_gold.xlsx', 'dest': 'Movie_title_garbage_clean_gold.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/Movie_title_garbage_clean.xlsx', 'dest': 'Movie_title_garbage_clean.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/a9f325aa-8c05-4e4f-8341-9e4358565f4f/Movie_titles_garbage_clean_gold.xlsx', 'dest': 'Movie_title_garbage_clean_gold.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/a9f325aa-8c05-4e4f-8341-9e4358565f4f"
 }

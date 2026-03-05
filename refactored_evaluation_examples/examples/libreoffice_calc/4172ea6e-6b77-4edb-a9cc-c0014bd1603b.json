@@ -7,7 +7,6 @@
     "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/4172ea6e-6b77-4edb-a9cc-c0014bd1603b/MaturityDate.xlsx', 'path': '/home/user/MaturityDate.xlsx'}])",
     "_open_setup(path='/home/user/MaturityDate.xlsx')"
   ],
-  "trajectory": "trajectories/4172ea6e-6b77-4edb-a9cc-c0014bd1603b",
   "related_apps": [
     "libreoffice_calc"
   ],
@@ -18,9 +17,7 @@
       "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
       "_sleep_setup(seconds=0.5)"
     ],
-    "eval": "compare_table(vm_file_getter(env, config={'path': '/home/user/MaturityDate.xlsx', 'dest': 'MaturityDate.xlsx'}), expected=cloud_file_getter(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/4172ea6e-6b77-4edb-a9cc-c0014bd1603b/1_MaturityDate_gt1.xlsx', 'dest': '1_MaturityDate_gt1.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/MaturityDate.xlsx', 'dest': 'MaturityDate.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/4172ea6e-6b77-4edb-a9cc-c0014bd1603b/1_MaturityDate_gt1.xlsx', 'dest': '1_MaturityDate_gt1.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/4172ea6e-6b77-4edb-a9cc-c0014bd1603b"
 }

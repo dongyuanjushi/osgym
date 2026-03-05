@@ -7,7 +7,6 @@
     "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/7e429b8d-a3f0-4ed0-9b58-08957d00b127/VLOOKUP_Fill_the_form.xlsx', 'path': '/home/user/VLOOKUP_Fill_the_form.xlsx'}])",
     "_open_setup(path='/home/user/VLOOKUP_Fill_the_form.xlsx')"
   ],
-  "trajectory": "trajectories/7e429b8d-a3f0-4ed0-9b58-08957d00b127",
   "related_apps": [
     "libreoffice calc"
   ],
@@ -15,12 +14,10 @@
     "postconfig": [
       "_activate_window_setup(window_name='VLOOKUP_Fill_the_form.xlsx - LibreOffice Calc', strict=True)",
       "_sleep_setup(seconds=0.5)",
-      "_execute_setup(command=['python', '-c', \"import pyautogui; pyautogui.hotkey('ctrl', 's');\"])",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
       "_sleep_setup(seconds=0.5)"
     ],
-    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/VLOOKUP_Fill_the_form.xlsx', 'dest': 'VLOOKUP_Fill_the_form.xlsx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/7e429b8d-a3f0-4ed0-9b58-08957d00b127/VLOOKUP_Fill_the_form_gold.xlsx', 'dest': 'VLOOKUP_Fill_the_form_gold.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/VLOOKUP_Fill_the_form.xlsx', 'dest': 'VLOOKUP_Fill_the_form.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/7e429b8d-a3f0-4ed0-9b58-08957d00b127/VLOOKUP_Fill_the_form_gold.xlsx', 'dest': 'VLOOKUP_Fill_the_form_gold.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 0, 'sheet_idx1': 'EI0'}])"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/7e429b8d-a3f0-4ed0-9b58-08957d00b127"
 }

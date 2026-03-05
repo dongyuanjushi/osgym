@@ -9,14 +9,11 @@
     "_chrome_open_tabs_setup(urls_to_open=['https://www.accuweather.com/'])",
     "_activate_window_setup(window_name='Google Chrome')"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "chrome"
   ],
   "evaluator": {
-    "eval": "check_direct_json_object(get_url_dashPart(env, config={'goto_prefix': 'https://www.', 'partIndex': -2, 'needDeleteId': False, 'returnType': 'json', 'key': 'time'}), rules=get_rule_relativeTime(env, config={'rules': {'relativeTime': {'from': 'this month'}, 'expected': {'time': '{month}-weather'}}})) and is_expected_url_pattern_match(get_active_url_from_accessTree(env, config={'goto_prefix': 'https://www.'}), rules={'expected': ['/manchester/']})"
+    "eval": "check_direct_json_object(get_url_dashPart(env, config={'goto_prefix': 'https://www.', 'partIndex': -2, 'needDeleteId': False, 'returnType': 'json', 'key': 'time'}), get_rule_relativeTime()) and is_expected_url_pattern_match(get_active_url_from_accessTree(env, config={'goto_prefix': 'https://www.'}), get_rule(env, config={'rules': {'expected': ['/manchester/']}}))"
   },
-  "proxy": true,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/"
 }

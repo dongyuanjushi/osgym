@@ -1,0 +1,17 @@
+{
+  "id": "4bcb1253-a636-4df4-8cb0-a35c04dfef31",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Export the current document into PDF, keep the file name",
+  "source": "https://www.libreofficehelp.com/save-export-writer-documents-in-pdf-epub-format/",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/4bcb1253-a636-4df4-8cb0-a35c04dfef31/View_Person_Organizational_Summary.docx', 'path': '/home/user/Desktop/View_Person_Organizational_Summary.docx'}])",
+    "_open_setup(path='/home/user/Desktop/View_Person_Organizational_Summary.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "eval": "compare_pdfs(get_vm_file(env, config={'path': '/home/user/Desktop/View_Person_Organizational_Summary.pdf', 'dest': 'Constitution_Template_With_Guidelines_1.pdf'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/4bcb1253-a636-4df4-8cb0-a35c04dfef31/View_Person_Organizational_Summary.pdf', 'dest': 'Constitution_Template_With_Guidelines_Gold_1.pdf'})) or compare_pdfs(get_vm_file(env, config={'path': '/home/user/Documents/View_Person_Organizational_Summary.pdf', 'dest': 'Constitution_Template_With_Guidelines_2.pdf'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/4bcb1253-a636-4df4-8cb0-a35c04dfef31/View_Person_Organizational_Summary.pdf', 'dest': 'Constitution_Template_With_Guidelines_Gold_2.pdf'})) or compare_pdfs(get_vm_file(env, config={'path': '/home/user/Downloads/View_Person_Organizational_Summary.pdf', 'dest': 'Constitution_Template_With_Guidelines_3.pdf'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/4bcb1253-a636-4df4-8cb0-a35c04dfef31/View_Person_Organizational_Summary.pdf', 'dest': 'Constitution_Template_With_Guidelines_Gold_3.pdf'})) or compare_pdfs(get_vm_file(env, config={'path': '/home/user/View_Person_Organizational_Summary.pdf', 'dest': 'Constitution_Template_With_Guidelines_4.pdf'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/4bcb1253-a636-4df4-8cb0-a35c04dfef31/View_Person_Organizational_Summary.pdf', 'dest': 'Constitution_Template_With_Guidelines_Gold_4.pdf'}))"
+  },
+  "trajectory": "trajectories/"
+}

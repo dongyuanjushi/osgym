@@ -1,0 +1,31 @@
+{
+  "id": "415ef462-bed3-493a-ac36-ca8c6d23bf1b",
+  "snapshot": "thunderbird",
+  "instruction": "There's an e-mail containing the AWS invoice for December saved in local \"Bills\" folder. Extract the invoice PDF to the my receipts folder. Follow the file name pattern of the old files and append a record at the end of my tally book.",
+  "source": "authors",
+  "config": [
+    "_execute_setup(command=['mkdir', '-p', '/home/user/Documents/Finance/receipts', '/home/user/Documents/Projects'])",
+    "_download_setup(files=[{'path': '/home/user/Documents/Finance/receipts/aws-invoice-2308.pdf', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/415ef462-bed3-493a-ac36-ca8c6d23bf1b/invoice0123456789-2308.pdf'}, {'path': '/home/user/Documents/Finance/receipts/aws-invoice-2309.pdf', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/415ef462-bed3-493a-ac36-ca8c6d23bf1b/invoice0123456789-2309.pdf'}, {'path': '/home/user/Documents/Finance/receipts/aws-invoice-2310.pdf', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/415ef462-bed3-493a-ac36-ca8c6d23bf1b/invoice0123456789-2310.pdf'}, {'path': '/home/user/Documents/Finance/receipts/aws-invoice-2311.pdf', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/415ef462-bed3-493a-ac36-ca8c6d23bf1b/invoice0123456789-2311.pdf'}, {'path': '/home/user/Documents/Finance/receipts/X-receipt-2312.pdf', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/415ef462-bed3-493a-ac36-ca8c6d23bf1b/Receipt-0123-4567.pdf'}, {'path': '/home/user/Documents/Finance/tally_book.xlsx', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/415ef462-bed3-493a-ac36-ca8c6d23bf1b/tally_book.xlsx'}, {'path': '/home/user/.projects.tar.xz', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/415ef462-bed3-493a-ac36-ca8c6d23bf1b/projects.tar.xz'}, {'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/415ef462-bed3-493a-ac36-ca8c6d23bf1b/thunderbird-profile.tar.gz', 'path': '/home/user/thunderbird-profile.tar.gz'}])",
+    "_execute_setup(command=['tar', '-xJvf', '/home/user/.projects.tar.xz', '-C', '/home/user/Documents/Projects'])",
+    "_execute_setup(command=['tar', '-xzv', '--recursive-unlink', '-f', '/home/user/thunderbird-profile.tar.gz', '-C', '/home/user/'])",
+    "_launch_setup(command=['thunderbird'])",
+    "_launch_setup(command=['nautilus', '/home/user/Documents/Finance'])"
+  ],
+  "related_apps": [
+    "thunderbird",
+    "libreoffice_calc",
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='tally_book.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
+      "_sleep_setup(seconds=0.5)",
+      "_download_setup(files=[{'path': '/home/user/.aws-invoice-2312.pdf', 'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/415ef462-bed3-493a-ac36-ca8c6d23bf1b/invoice0123456789-2312.pdf'}])",
+      "_execute_setup(command=['diff', '.aws-invoice-2312.pdf', '/home/user/Documents/Finance/receipts/aws-invoice-2312.pdf'], stdout='diff.out')"
+    ],
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/Documents/Finance/tally_book.xlsx', 'dest': 'tally_book.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/415ef462-bed3-493a-ac36-ca8c6d23bf1b/tally_book_gt.xlsx', 'dest': 'tally_book_gt.xlsx'})) and check_list(get_cache_file(env, config={'path': 'diff.out'}), get_rule(env, config={'rules': {'unexpect': ['.+']}}))"
+  },
+  "trajectory": "trajectories/415ef462-bed3-493a-ac36-ca8c6d23bf1b"
+}

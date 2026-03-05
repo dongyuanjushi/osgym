@@ -1,0 +1,17 @@
+{
+  "id": "2373b66a-092d-44cb-bfd7-82e86e7a3b4d",
+  "snapshot": "multiapps",
+  "instruction": "Monitor Ubuntu system resource usage using the sar command from sysstat toolkit. Collect CPU statistics every second for 30 seconds and save the output to 'System_Resources_Report.txt' on Desktop.",
+  "source": "author",
+  "config": [
+    "_command_setup(command='echo {CLIENT_PASSWORD} | sudo -S apt-get update && echo {CLIENT_PASSWORD} | sudo -S apt-get install sysstat', shell='true')"
+  ],
+  "related_apps": [
+    "os",
+    "calc"
+  ],
+  "evaluator": {
+    "eval": "file_contains(get_vm_file(env, config={'path': '/home/user/Desktop/System_Resources_Report.txt', 'dest': 'System_Resources_Report.txt'}), get_rule(env, config={'rules': {'expected': ['CPU', '%user', '%nice', '%system', '%iowait', '%steal', '%idle']}})) and check_line_number(get_vm_file(env, config={'path': '/home/user/Desktop/System_Resources_Report.txt', 'dest': 'System_Resources_Report.txt'}), get_rule(env, config={'rules': {'expected': '31'}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,22 @@
+{
+  "id": "88fe4b2d-3040-4c70-9a70-546a47764b48",
+  "snapshot": "libreoffice_writer",
+  "instruction": "I am making a guideline for students of my course and would like to separate each sentence in the the first paragraph to improve readability. Please separate each sentence by creating one empty line space after each of them, as I am having hard time separating them one by one.",
+  "source": "https://stackoverflow.com/questions/56554555/libreoffice-writer-how-to-create-empty-line-space-after-every-period-in-a-par",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/88fe4b2d-3040-4c70-9a70-546a47764b48/CCCH9003_Tutorial_guidelines.docx', 'path': '/home/user/Desktop/CCCH9003_Tutorial_guidelines.docx'}])",
+    "_open_setup(path='/home/user/Desktop/CCCH9003_Tutorial_guidelines.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='CCCH9003_Tutorial_guidelines.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); \"])"
+    ],
+    "eval": "compare_docx_files(get_vm_file(env, config={'path': '/home/user/Desktop/CCCH9003_Tutorial_guidelines.docx', 'dest': 'CCCH9003_Tutorial_guidelines.docx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/88fe4b2d-3040-4c70-9a70-546a47764b48/CCCH9003_Tutorial_guidelines_Gold_1.docx', 'dest': 'CCCH9003_Tutorial_guidelines_Gold_1.docx'})) or compare_docx_files(get_vm_file(env, config={'path': '/home/user/Desktop/CCCH9003_Tutorial_guidelines.docx', 'dest': 'CCCH9003_Tutorial_guidelines.docx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/88fe4b2d-3040-4c70-9a70-546a47764b48/CCCH9003_Tutorial_guidelines_Gold_2.docx', 'dest': 'CCCH9003_Tutorial_guidelines_Gold_2.docx'})) or compare_docx_files(get_vm_file(env, config={'path': '/home/user/Desktop/CCCH9003_Tutorial_guidelines.docx', 'dest': 'CCCH9003_Tutorial_guidelines.docx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_writer/88fe4b2d-3040-4c70-9a70-546a47764b48/CCCH9003_Tutorial_guidelines_Gold_3.docx', 'dest': 'CCCH9003_Tutorial_guidelines_Gold_3.docx'}))"
+  },
+  "trajectory": "trajectories/"
+}

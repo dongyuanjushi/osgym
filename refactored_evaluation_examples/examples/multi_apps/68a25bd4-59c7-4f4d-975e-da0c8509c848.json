@@ -1,0 +1,20 @@
+{
+  "id": "68a25bd4-59c7-4f4d-975e-da0c8509c848",
+  "snapshot": "libreoffice_calc",
+  "instruction": "I've compiled papers and books with links in this spreadsheet. Help me download the PDF of the first paper, save it as \"paper01.pdf\" in the /home/user directory. Additionally, I would like to know which paper in my list cites the initial one. Please determine and document the title saved as \"ans.docx\" in the same directory.",
+  "source": "",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/68a25bd4-59c7-4f4d-975e-da0c8509c848/rsc-ebook-collection-2023.xlsx', 'path': '/home/user/Desktop/rsc-ebook-collection-2023.xlsx'}])",
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_open_setup(path='/home/user/Desktop/rsc-ebook-collection-2023.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc",
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "compare_pdfs(get_vm_file(env, config={'path': '/home/user/paper01.pdf', 'dest': 'paper01.pdf'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/68a25bd4-59c7-4f4d-975e-da0c8509c848/paper01.pdf', 'dest': 'paper01_Gold.pdf'})) and compare_docx_files(get_vm_file(env, config={'path': '/home/user/ans.docx', 'dest': 'ans.docx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/68a25bd4-59c7-4f4d-975e-da0c8509c848/ans.docx', 'dest': 'ans_Gold.docx'}))"
+  },
+  "trajectory": "trajectories/68a25bd4-59c7-4f4d-975e-da0c8509c848"
+}

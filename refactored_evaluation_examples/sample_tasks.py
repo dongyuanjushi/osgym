@@ -14,6 +14,9 @@ import json
 import random
 import sys
 from pathlib import Path
+from datasets import Dataset
+import uuid
+from loguru import logger
 
 
 def calculate_domain_counts(data):
@@ -271,9 +274,62 @@ def main():
     # print(f"  python sample_tasks.py [seed] [train_count]")
     # print(f"  Default: seed=42, train_count=128")
     
-    from datasets import load_dataset
-    dataset = load_dataset("json", data_files="no_gdrive_rl_train.jsonl")
-    print(dataset)
+    # from datasets import load_dataset
+    # dataset = load_dataset("json", data_files="no_gdrive_rl_train.jsonl")
+    # print(dataset)
+    
+    dataset_path = "no_gdrive_rl_train.json"
+    
+    with open(dataset_path, 'r') as f:
+        raw_data = json.load(f)
+
+    # Transform to the format expected by the workflow
+    # Serialize complex/nested structures as JSON strings to avoid PyArrow type issues
+    processed_data = []
+    for item in raw_data:
+        # Handle 'source' field - can be str or list, normalize to str
+        source = item.get("source", "")
+        if isinstance(source, list):
+            source = json.dumps(source)
+
+        # Handle 'config' field - serialize as JSON string for consistency
+        config = item.get("config", [])
+        config_str = json.dumps(config) if config else "[]"
+
+        # Handle 'evaluator' field - serialize as JSON string
+        evaluator = item.get("evaluator", {})
+        evaluator_str = json.dumps(evaluator) if evaluator else "{}"
+
+        # Handle 'related_apps' field - serialize as JSON string
+        related_apps = item.get("related_apps", [])
+        related_apps_str = json.dumps(related_apps) if related_apps else "[]"
+
+        # Serialize entire task_config as JSON string
+        task_config_str = json.dumps(item)
+
+        processed_item = {
+            "id": item.get("id", str(uuid.uuid4())),
+            "qid": item.get("id", str(uuid.uuid4())),
+            "instruction": item.get("instruction", ""),
+            "snapshot": item.get("snapshot", ""),
+            "config": config_str,  # JSON string
+            "evaluator": evaluator_str,  # JSON string
+            "related_apps": related_apps_str,  # JSON string
+            "domain": item.get("domain", ""),
+            "source": source,  # Normalized to string
+            "proxy": item.get("proxy", False),
+            "fixed_ip": item.get("fixed_ip", False),
+            "task_config": task_config_str,  # JSON string of entire item
+        }
+        processed_data.append(processed_item)
+
+    # Create a HuggingFace Dataset
+    dataset = Dataset.from_list(processed_data)
+    
+    breakpoint()
+
+    logger.info(f"Loaded {len(dataset)} tasks from {dataset_path}")
+    return dataset
 
 
 if __name__ == "__main__":

@@ -7,14 +7,11 @@
     "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/gimp/58d3eeeb-e9d0-499f-962e-fd0db2a744d8/heron.jpeg', 'path': '/home/user/Desktop/heron.jpeg'}])",
     "_launch_setup(command=['gimp', '/home/user/Desktop/heron.jpeg'])"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "gimp"
   ],
   "evaluator": {
-    "eval": "infeasible()"
+    "eval": "infeasible(get_(env, config={}))"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/"
 }

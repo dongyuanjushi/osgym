@@ -7,7 +7,6 @@
     "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/b8adbc24-cef2-4b15-99d5-ecbe7ff445eb/189_4.pptx', 'path': '/home/user/Desktop/189_4.pptx'}])",
     "_open_setup(path='/home/user/Desktop/189_4.pptx')"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "libreoffice_impress"
   ],
@@ -18,9 +17,7 @@
       "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
       "_sleep_setup(seconds=0.5)"
     ],
-    "eval": "compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/189_4.pptx', 'dest': '189_4.pptx'}), expected=get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/b8adbc24-cef2-4b15-99d5-ecbe7ff445eb/189_4_Gold.pptx', 'dest': '189_4_Gold.pptx'}), rules={'examine_alignment': False, 'examine_font_name': False, 'examine_shape': False, 'examine_font_size': False})"
+    "eval": "compare_pptx_files(get_vm_file(env, config={'path': '/home/user/Desktop/189_4.pptx', 'dest': '189_4.pptx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_impress/b8adbc24-cef2-4b15-99d5-ecbe7ff445eb/189_4_Gold.pptx', 'dest': '189_4_Gold.pptx'}), examine_alignment=False, examine_font_name=False, examine_shape=False, examine_font_size=False)"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/"
 }

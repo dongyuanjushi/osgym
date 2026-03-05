@@ -9,14 +9,11 @@
     "_chrome_open_tabs_setup(urls_to_open=['https://www.rentalcars.com/'])",
     "_activate_window_setup(window_name='Google Chrome')"
   ],
-  "trajectory": "trajectories/",
   "related_apps": [
     "chrome"
   ],
   "evaluator": {
-    "eval": "check_direct_json_object(get_active_tab_url_parse(env, config={'goto_prefix': 'https://www.', 'parse_keys': ['locationName', 'dropLocationName', 'filterCriteria_carCategory', 'filterCriteria_sortBy']}), rules={'expected': {'locationName': 'Zürich', 'dropLocationName': 'Zürich', 'filterCriteria_carCategory': 'large', 'filterCriteria_sortBy': 'PRICE'}}) and check_direct_json_object(get_active_tab_url_parse(env, config={'goto_prefix': 'https://www.', 'parse_keys': ['puDay', 'puMonth', 'puYear', 'doDay', 'doMonth', 'doYear']}), rules=get_rule_relativeTime(env, config={'rules': {'relativeTime': {'from': 'next Monday split', 'to': 'next Friday split'}, 'timezone': 'Europe/Zurich', 'expected': {'puDay': '{DayD}', 'puMonth': '{MonthD}', 'puYear': '{Year}', 'doDay': '{DayD}', 'doMonth': '{MonthD}', 'doYear': '{Year}'}}}))"
+    "eval": "check_direct_json_object(get_active_tab_url_parse(env, config={'goto_prefix': 'https://www.', 'parse_keys': ['locationName', 'dropLocationName', 'filterCriteria_carCategory', 'filterCriteria_sortBy']}), get_rule(env, config={'rules': {'expected': {'locationName': 'Z\u00fcrich', 'dropLocationName': 'Z\u00fcrich', 'filterCriteria_carCategory': 'large', 'filterCriteria_sortBy': 'PRICE'}}})) and check_direct_json_object(get_active_tab_url_parse(env, config={'goto_prefix': 'https://www.', 'parse_keys': ['puDay', 'puMonth', 'puYear', 'doDay', 'doMonth', 'doYear']}), get_rule_relativeTime())"
   },
-  "proxy": true,
-  "possibility_of_env_change": "medium",
-  "fixed_ip": false
+  "trajectory": "trajectories/"
 }

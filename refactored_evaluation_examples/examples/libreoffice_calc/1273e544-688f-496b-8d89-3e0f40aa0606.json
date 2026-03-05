@@ -7,7 +7,6 @@
     "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/1273e544-688f-496b-8d89-3e0f40aa0606/NetIncome.xlsx', 'path': '/home/user/NetIncome.xlsx'}])",
     "_open_setup(path='/home/user/NetIncome.xlsx')"
   ],
-  "trajectory": "trajectories/1273e544-688f-496b-8d89-3e0f40aa0606",
   "related_apps": [
     "libreoffice_calc"
   ],
@@ -18,9 +17,7 @@
       "_execute_setup(command=['python', '-c', 'import pyautogui; pyautogui.hotkey(\"ctrl\", \"s\");'])",
       "_sleep_setup(seconds=0.5)"
     ],
-    "eval": "compare_table(vm_file_getter(env, config={'path': '/home/user/NetIncome.xlsx', 'dest': 'NetIncome.xlsx'}), expected=cloud_file_getter(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/1273e544-688f-496b-8d89-3e0f40aa0606/3_NetIncome_gt1.xlsx', 'dest': '3_NetIncome_gt1.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 'RNSheet2', 'sheet_idx1': 'ENSheet2'}])"
+    "eval": "compare_table(get_vm_file(env, config={'path': '/home/user/NetIncome.xlsx', 'dest': 'NetIncome.xlsx'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/libreoffice_calc/1273e544-688f-496b-8d89-3e0f40aa0606/3_NetIncome_gt1.xlsx', 'dest': '3_NetIncome_gt1.xlsx'}), rules=[{'type': 'sheet_data', 'sheet_idx0': 'RNSheet2', 'sheet_idx1': 'ENSheet2'}])"
   },
-  "proxy": false,
-  "fixed_ip": false,
-  "possibility_of_env_change": "low"
+  "trajectory": "trajectories/1273e544-688f-496b-8d89-3e0f40aa0606"
 }

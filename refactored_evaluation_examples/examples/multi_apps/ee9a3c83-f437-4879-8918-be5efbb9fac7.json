@@ -1,0 +1,23 @@
+{
+  "id": "ee9a3c83-f437-4879-8918-be5efbb9fac7",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Could you help me convert the opened ods file in the desktop to csv file with the same file name using command line when Libreoffice instance is running?",
+  "source": "https://stackoverflow.com/questions/64589140/convert-ods-to-csv-using-command-line-when-libreoffice-instance-is-running",
+  "config": [
+    "_download_setup(files=[{'url': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/ee9a3c83-f437-4879-8918-be5efbb9fac7/file_example_ODS_5000.ods', 'path': '/home/user/Desktop/file_example_ODS_5000.ods'}])",
+    "_open_setup(path='/home/user/Desktop/file_example_ODS_5000.ods')",
+    "_execute_setup(command=['/bin/bash', '-c', 'history -c && echo > ~/.bash_history && sleep 3'])",
+    "_execute_setup(command=\"export DBUS_SESSION_BUS_ADDRESS='unix:path=/run/user/1000/bus'\\ngnome-terminal --maximize --working-directory=/home/user/Desktop\", shell=True)"
+  ],
+  "related_apps": [
+    "libreoffice_calc",
+    "terminal"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['/bin/bash', '-c', 'killall gnome-terminal-server'])"
+    ],
+    "eval": "check_include_exclude(get_vm_command_line(env, config={'command': ['/bin/bash', '-c', 'use_terminal=$(cat ~/.bash_history | grep \"\\\\(soffice\\\\|libreoffice\\\\).\\\\+--convert-to\\\\s\\\\+csv\"); if [ -z \"$use_terminal\" ]; then echo \"use no terminal\"; else echo \"use terminal\"; fi']}), get_rule(env, config={'rules': {'include': ['use terminal']}})) and compare_csv(get_vm_file(env, config={'path': '/home/user/Desktop/file_example_ODS_5000.csv', 'dest': 'file_example_ODS_5000.csv'}), get_cloud_file(env, config={'path': 'https://huggingface.co/datasets/xlangai/ubuntu_osworld_file_cache/resolve/main/multi_apps/ee9a3c83-f437-4879-8918-be5efbb9fac7/file_example_ODS_5000.csv', 'dest': 'file_example_ODS_5000_gold.csv'}))"
+  },
+  "trajectory": "trajectories/"
+}
