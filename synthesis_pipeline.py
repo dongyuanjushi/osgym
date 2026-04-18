@@ -18,6 +18,7 @@ Parallel VM management follows the pattern in run_multienv_docker.py:
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime
 import glob
 import inspect
@@ -49,6 +50,169 @@ EXAMPLES_DIR = os.path.join(
     "refactored_evaluation_examples",
     "examples",
 )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Synthesis Memory – cross-round experience store
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class SynthesisMemory:
+    """JSON-backed memory of past synthesis rounds.
+
+    Each entry records one task's synthesis + verification outcome so that
+    future rounds can:
+      - avoid regenerating similar tasks,
+      - avoid patterns that consistently fail,
+      - steer toward unexplored UI areas.
+
+    File layout (``synthesis_memory.json``):
+    ```json
+    {
+      "entries": [ { ... }, ... ],
+      "stats": { "total": N, "verified": N, "rejected": N }
+    }
+    ```
+    """
+
+    def __init__(self, output_dir: str):
+        self.path = os.path.join(output_dir, "synthesis_memory.json")
+        self.entries: List[Dict[str, Any]] = []
+        self.stats: Dict[str, int] = {"total": 0, "verified": 0, "rejected": 0}
+
+    # -- persistence --------------------------------------------------------
+
+    def load(self) -> "SynthesisMemory":
+        if os.path.isfile(self.path):
+            with open(self.path, "r") as f:
+                data = json.load(f)
+            self.entries = data.get("entries", [])
+            self.stats = data.get("stats", self.stats)
+            logger.info("Loaded synthesis memory: %d entries from %s", len(self.entries), self.path)
+        else:
+            logger.info("No existing synthesis memory at %s – starting fresh", self.path)
+        return self
+
+    def save(self) -> None:
+        self.stats = {
+            "total": len(self.entries),
+            "verified": sum(1 for e in self.entries if e.get("verified")),
+            "rejected": sum(1 for e in self.entries if not e.get("verified")),
+        }
+        os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+        with open(self.path, "w") as f:
+            json.dump({"entries": self.entries, "stats": self.stats}, f, indent=2)
+        logger.info("Saved synthesis memory (%d entries) to %s", len(self.entries), self.path)
+
+    # -- recording ----------------------------------------------------------
+
+    def record(
+        self,
+        example: Dict[str, Any],
+        domain: str,
+        gui_result: Optional[Dict[str, Any]],
+        code_result: Optional[Dict[str, Any]],
+        verified: bool,
+    ) -> None:
+        gui_score = gui_result.get("score", 0.0) if gui_result else None
+        code_score = code_result.get("score", 0.0) if code_result else None
+        gui_error = gui_result.get("error") if gui_result else None
+        code_error = code_result.get("error") if code_result else None
+
+        # Build concise failure reasons
+        failure_reasons = []
+        if not verified:
+            if gui_score is None or gui_score <= 0:
+                reason = f"gui_score={gui_score}"
+                if gui_error:
+                    reason += f" error={gui_error[:120]}"
+                failure_reasons.append(reason)
+            if code_score is None or code_score <= 0:
+                reason = f"code_score={code_score}"
+                if code_error:
+                    reason += f" error={code_error[:120]}"
+                failure_reasons.append(reason)
+
+        entry = {
+            "id": example.get("id", ""),
+            "domain": domain,
+            "instruction": example.get("instruction", ""),
+            "evaluator_eval": example.get("evaluator", {}).get("eval", ""),
+            "round_timestamp": datetime.datetime.now().isoformat(),
+            "gui_score": gui_score,
+            "code_score": code_score,
+            "gui_steps": gui_result.get("steps") if gui_result else None,
+            "code_steps": code_result.get("steps") if code_result else None,
+            "verified": verified,
+            "failure_reasons": failure_reasons,
+        }
+        self.entries.append(entry)
+
+    # -- querying -----------------------------------------------------------
+
+    def get_domain_entries(self, domain: str) -> List[Dict[str, Any]]:
+        return [e for e in self.entries if e.get("domain") == domain]
+
+    # -- prompt formatting --------------------------------------------------
+
+    def format_for_prompt(self, domain: str, max_entries: int = 30) -> str:
+        """Return a text block summarising past experience for *domain*,
+        suitable for injection into the LLM user prompt."""
+        domain_entries = self.get_domain_entries(domain)
+        if not domain_entries:
+            return ""
+
+        verified = [e for e in domain_entries if e.get("verified")]
+        rejected = [e for e in domain_entries if not e.get("verified")]
+
+        lines: List[str] = []
+        lines.append(
+            f"## Past synthesis experience for \"{domain}\" "
+            f"({len(verified)} verified, {len(rejected)} rejected)\n"
+        )
+
+        # --- Verified tasks: show instruction so LLM avoids duplicates ---
+        if verified:
+            lines.append("### Previously VERIFIED tasks (do NOT generate similar ones):")
+            for e in verified[-max_entries:]:
+                lines.append(f"  - \"{e['instruction']}\"  [gui={e.get('gui_score')}, code={e.get('code_score')}]")
+            lines.append("")
+
+        # --- Rejected tasks with failure analysis ---
+        if rejected:
+            lines.append("### Previously REJECTED tasks (learn from these failures):")
+            for e in rejected[-max_entries:]:
+                reasons = "; ".join(e.get("failure_reasons", ["unknown"]))
+                lines.append(
+                    f"  - \"{e['instruction']}\"\n"
+                    f"    evaluator: {e.get('evaluator_eval', 'n/a')[:100]}\n"
+                    f"    failure: {reasons}"
+                )
+            lines.append("")
+
+            # --- Aggregate failure patterns ---
+            failure_keywords: Dict[str, int] = {}
+            for e in rejected:
+                for r in e.get("failure_reasons", []):
+                    if "error=" in r:
+                        # Extract short error signature
+                        err = r.split("error=")[-1][:60]
+                        failure_keywords[err] = failure_keywords.get(err, 0) + 1
+            if failure_keywords:
+                lines.append("### Common failure patterns (avoid these):")
+                for kw, cnt in sorted(failure_keywords.items(), key=lambda x: -x[1])[:10]:
+                    lines.append(f"  - ({cnt}x) {kw}")
+                lines.append("")
+
+        # --- Coverage summary: which UI areas are already explored ---
+        all_instructions = [e["instruction"] for e in domain_entries]
+        if all_instructions:
+            lines.append(
+                f"### Coverage: {len(all_instructions)} tasks generated so far. "
+                f"Explore UI areas and menu paths NOT yet covered above.\n"
+            )
+
+        return "\n".join(lines)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Module 1: Domain Discovery & Information Gathering
@@ -138,8 +302,30 @@ def catalog_functions() -> FunctionCatalog:
 # Module 2: LLM-Based Task Example Generation
 # ═══════════════════════════════════════════════════════════════════════════
 
-_TASK_GEN_SYSTEM = """\
-You are an expert at generating desktop automation task examples for the OSWorld benchmark.
+TASK_GEN_SYSTEM = """You are an expert at generating desktop automation task examples for the OSWorld benchmark.
+
+FOCUS: Generate tasks that **explore the software layout and menus** of each application. \
+The goal is to produce tasks whose execution reveals rich environment dynamics — how the UI \
+reacts to interactions, what state transitions menus trigger, and how panels/toolbars/dialogs \
+rearrange when features are activated. Good tasks exercise the spatial and interactive \
+structure of the application rather than just its data-processing capabilities.
+
+Prefer tasks that:
+- Open, close, toggle, or rearrange UI panels, sidebars, toolbars, and status bars \
+  (e.g., View > Show Sidebar, View > Toolbars > Drawing)
+- Navigate through nested menu hierarchies to discover and activate features \
+  (e.g., Tools > Options > Language Settings, Format > Columns > Two)
+- Trigger dialogs, pop-ups, or context menus and interact with their controls \
+  (e.g., Insert > Special Character, right-click > Paragraph Properties)
+- Switch between application modes or views that change the visible layout \
+  (e.g., Normal / Outline / Master view in Impress, Reader / Source in VS Code)
+- Adjust display settings such as zoom, page layout, ruler visibility, or grid snapping
+- Explore tab/workspace management (new tab, split view, tab groups, window tiling)
+- Activate or configure inspectors, property panels, layer dialogs, or developer tools
+
+Avoid tasks that are purely data-entry (typing long text, filling spreadsheet cells) \
+or that only read information without changing any UI state.
+
 Each task example is a JSON object with these fields:
 - "id": a UUID4 string
 - "snapshot": the application snapshot name (usually the domain or app name)
@@ -149,14 +335,14 @@ Each task example is a JSON object with these fields:
 - "related_apps": a list of application names involved
 - "evaluator": an object with optional "postconfig" (list of setup strings) and "eval" \
 (a Python expression composing getter + metric functions)
-- "trajectory": "trajectories/"
 
 Rules:
 1. The instruction must be concrete and achievable on an Ubuntu desktop.
-2. The config must use ONLY the setup functions provided.
-3. The evaluator "eval" must compose getter and metric functions from the library provided.
-4. Do NOT invent new getter/metric functions unless absolutely necessary.
-5. Return valid JSON only, no markdown fences."""
+2. The task MUST explore the application's layout, menus, or UI structure.
+3. The config must use ONLY the setup functions provided.
+4. The evaluator "eval" must compose getter and metric functions from the library provided.
+5. Do NOT invent new getter/metric functions unless absolutely necessary.
+6. Return valid JSON only, no markdown fences."""
 
 
 def _fmt_funcs(funcs: List[Dict[str, str]]) -> str:
@@ -168,20 +354,38 @@ def generate_task_examples(
     catalog: FunctionCatalog,
     llm_config: Dict[str, Any],
     num_to_generate: int = 1,
+    max_steps: int = 15,
+    memory: Optional[SynthesisMemory] = None,
 ) -> List[Dict[str, Any]]:
     ref = json.dumps(domain_info.examples[:5], indent=2)
+
+    # Build memory context (empty string if no prior experience)
+    memory_block = ""
+    if memory is not None:
+        memory_block = memory.format_for_prompt(domain_info.name)
+        if memory_block:
+            memory_block = f"\n{memory_block}\n"
+
     user = (
         f"Domain: {domain_info.name}\n"
         f"Existing examples: {len(domain_info.example_files)}\n\n"
+        f"## Complexity budget\n"
+        f"Each task must be completable by a GUI agent in at most **{max_steps} steps** "
+        f"(each step = one mouse click, keystroke, or typed string). "
+        f"Keep tasks focused on exploring one aspect of the software layout or menu "
+        f"structure per task.\n\n"
+        f"{memory_block}"
         f"## Reference examples\n{ref}\n\n"
         f"## Setup functions\n{_fmt_funcs(catalog.setup_functions)}\n\n"
         f"## Getter functions\n{_fmt_funcs(catalog.getter_functions)}\n\n"
         f"## Metric functions\n{_fmt_funcs(catalog.metric_functions)}\n\n"
         f"Generate {num_to_generate} new, diverse task example(s) for \"{domain_info.name}\".\n"
+        f"Each task should explore a different part of the software's layout, menus, or UI "
+        f"panels to maximize coverage of the application's interactive structure.\n"
         f"Return a JSON array of task objects."
     )
     messages = [
-        {"role": "system", "content": _TASK_GEN_SYSTEM},
+        {"role": "system", "content": TASK_GEN_SYSTEM},
         {"role": "user", "content": user},
     ]
     logger.info("Generating %d task example(s) for '%s' ...", num_to_generate, domain_info.name)
@@ -214,8 +418,7 @@ def generate_task_examples(
 # Module 3: Verifier Function Generation
 # ═══════════════════════════════════════════════════════════════════════════
 
-_VERIFIER_GEN_SYSTEM = """\
-You are an expert at composing verifier (evaluator) expressions for OSWorld desktop tasks.
+VERIFIER_GEN_SYSTEM = """You are an expert at composing verifier (evaluator) expressions for OSWorld desktop tasks.
 
 A verifier expression is a single Python expression that:
 1. Uses getter functions (signature: getter(env, config={...})) to extract state from the VM.
@@ -249,7 +452,7 @@ def generate_verifier(
         f"Generate a verifier. Return JSON: {{\"postconfig\": [...], \"eval\": \"...\"}}"
     )
     messages = [
-        {"role": "system", "content": _VERIFIER_GEN_SYSTEM},
+        {"role": "system", "content": VERIFIER_GEN_SYSTEM},
         {"role": "user", "content": user},
     ]
     logger.info("Generating verifier for: '%s' ...", task_instruction[:80])
@@ -264,11 +467,114 @@ def generate_verifier(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Module 3b: Static Validation of Setup / Evaluator Scripts
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _collect_valid_names(catalog: FunctionCatalog) -> Tuple[set, set, set]:
+    """Return (setup_names, getter_names, metric_names) from the catalog."""
+    setup_names = {f["name"] for f in catalog.setup_functions}
+    getter_names = {f["name"] for f in catalog.getter_functions}
+    metric_names = {f["name"] for f in catalog.metric_functions}
+    return setup_names, getter_names, metric_names
+
+
+def _validate_setup_string(s: str, valid_setup_names: set) -> Optional[str]:
+    """Check one setup config/postconfig string.  Returns an error message or None."""
+    # Extract function name: everything before the first '('
+    paren = s.find("(")
+    if paren == -1:
+        return f"not a function call: {s!r}"
+    func_name = s[:paren].strip()
+    if func_name not in valid_setup_names:
+        return f"unknown setup function: {func_name!r}"
+    # Try parsing as Python to catch syntax errors
+    try:
+        ast.parse(s, mode="eval")
+    except SyntaxError as e:
+        return f"syntax error in setup string: {e}"
+    return None
+
+
+def _extract_call_names(node: ast.AST) -> List[str]:
+    """Walk an AST and collect every function-call name (direct calls only)."""
+    names = []
+    for child in ast.walk(node):
+        if isinstance(child, ast.Call) and isinstance(child.func, ast.Name):
+            names.append(child.func.id)
+    return names
+
+
+def _validate_eval_expr(eval_str: str, valid_getter_names: set,
+                        valid_metric_names: set) -> Optional[str]:
+    """Check one evaluator eval expression.  Returns an error message or None."""
+    if not eval_str or not eval_str.strip():
+        return "empty eval expression"
+    try:
+        tree = ast.parse(eval_str, mode="eval")
+    except SyntaxError as e:
+        return f"syntax error in eval expression: {e}"
+
+    called = _extract_call_names(tree)
+    if not called:
+        return "eval expression contains no function calls"
+
+    # Every called name must be a known getter, metric, or Python builtin
+    # that the eval namespace allows (env, config are names, not calls)
+    allowed = valid_getter_names | valid_metric_names | {"float", "int", "str", "len", "bool", "abs", "max", "min"}
+    unknown = [n for n in called if n not in allowed]
+    if unknown:
+        return f"unknown function(s) in eval: {unknown}"
+    return None
+
+
+@dataclass
+class ValidationResult:
+    valid: bool
+    errors: List[str] = field(default_factory=list)
+
+
+def validate_example_scripts(example: Dict[str, Any], catalog: FunctionCatalog) -> ValidationResult:
+    """Statically validate the setup config and evaluator scripts of a synthesized example.
+
+    Checks:
+      1. Every config entry references a known setup function and is syntactically valid Python.
+      2. Every postconfig entry (same check).
+      3. The evaluator eval expression parses as Python and only calls known getter/metric functions.
+
+    Returns a ValidationResult with .valid and .errors.
+    """
+    setup_names, getter_names, metric_names = _collect_valid_names(catalog)
+    errors: List[str] = []
+
+    # --- config ---
+    for i, entry in enumerate(example.get("config", [])):
+        err = _validate_setup_string(entry, setup_names)
+        if err:
+            errors.append(f"config[{i}]: {err}")
+
+    # --- evaluator.postconfig ---
+    evaluator = example.get("evaluator", {})
+    for i, entry in enumerate(evaluator.get("postconfig", [])):
+        err = _validate_setup_string(entry, setup_names)
+        if err:
+            errors.append(f"postconfig[{i}]: {err}")
+
+    # --- evaluator.eval ---
+    eval_str = evaluator.get("eval", "")
+    err = _validate_eval_expr(eval_str, getter_names, metric_names)
+    if err:
+        errors.append(f"eval: {err}")
+
+    return ValidationResult(valid=len(errors) == 0, errors=errors)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Synthesize stage: generate examples + verifiers (no VM)
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def run_synthesize(args: argparse.Namespace) -> List[Dict[str, Any]]:
+def run_synthesize(args: argparse.Namespace, memory: Optional[SynthesisMemory] = None) -> List[Dict[str, Any]]:
     """Generate synthetic examples + verifiers via LLM. Returns flat list of examples."""
     all_domains = discover_domains()
     catalog = catalog_functions()
@@ -285,7 +591,9 @@ def run_synthesize(args: argparse.Namespace) -> List[Dict[str, Any]]:
         domain_info = load_domain_examples(domain, max_examples=args.max_ref_examples)
         ref_evaluators = [ex.get("evaluator", {}) for ex in domain_info.examples]
 
-        examples = generate_task_examples(domain_info, catalog, llm_config, args.num_examples)
+        examples = generate_task_examples(
+            domain_info, catalog, llm_config, args.num_examples, args.max_steps, memory,
+        )
 
         for ex in examples:
             if not ex.get("evaluator", {}).get("eval"):
@@ -295,18 +603,46 @@ def run_synthesize(args: argparse.Namespace) -> List[Dict[str, Any]]:
                 )
             ex.setdefault("_domain", domain)
 
-        # Persist
+        # ---- Static validation: reject examples with bad scripts early ----
+        valid_examples = []
+        for ex in examples:
+            vr = validate_example_scripts(ex, catalog)
+            if vr.valid:
+                valid_examples.append(ex)
+            else:
+                logger.warning(
+                    "SCRIPT VALIDATION FAILED for %s: %s – skipping",
+                    ex.get("id", "?"), "; ".join(vr.errors),
+                )
+                # Record into memory as a rejected synthesis (no scores)
+                if memory is not None:
+                    memory.record(
+                        example=ex, domain=domain,
+                        gui_result={"score": 0.0, "error": f"script_validation: {'; '.join(vr.errors)}"},
+                        code_result={"score": 0.0, "error": f"script_validation: {'; '.join(vr.errors)}"},
+                        verified=False,
+                    )
+        logger.info(
+            "Domain '%s': %d/%d examples passed script validation",
+            domain, len(valid_examples), len(examples),
+        )
+
+        # Persist only validated examples
         domain_dir = os.path.join(args.output_dir, domain)
         os.makedirs(domain_dir, exist_ok=True)
-        for ex in examples:
+        for ex in valid_examples:
             path = os.path.join(domain_dir, f"{ex['id']}.json")
             with open(path, "w") as f:
                 json.dump(ex, f, indent=2)
             logger.info("Saved %s", path)
 
-        all_examples.extend(examples)
+        all_examples.extend(valid_examples)
 
-    # Write a manifest listing every generated example
+    # Save memory with any script-validation failures recorded above
+    if memory is not None:
+        memory.save()
+
+    # Write a manifest listing every generated (and validated) example
     manifest_path = os.path.join(args.output_dir, "manifest.json")
     manifest = {}
     for ex in all_examples:
@@ -347,7 +683,7 @@ def cleanup_environment(env, tag: str) -> None:
             logger.error("[%s] Error closing env: %s", tag, e)
 
 
-def _run_gui_task(agent, env, example: Dict[str, Any], args, result_dir: str) -> Dict[str, Any]:
+def run_gui_task(agent, env, example: Dict[str, Any], args, result_dir: str) -> Dict[str, Any]:
     """Execute one example via GUI agent. Returns result dict."""
     proc = current_process().name
     instruction = example["instruction"]
@@ -360,10 +696,6 @@ def _run_gui_task(agent, env, example: Dict[str, Any], args, result_dir: str) ->
     trajectory = []
     done = False
     step_idx = 0
-    try:
-        env.controller.start_recording()
-    except Exception:
-        pass
 
     while not done and step_idx < args.max_steps:
         _, thought, action_code = agent.predict(instruction, obs)
@@ -388,11 +720,6 @@ def _run_gui_task(agent, env, example: Dict[str, Any], args, result_dir: str) ->
     score = env.evaluate()
     logger.info("[%s][gui] score=%.2f for %s", proc, score, example["id"])
 
-    try:
-        env.controller.end_recording(os.path.join(result_dir, "recording.mp4"))
-    except Exception:
-        pass
-
     # Persist
     with open(os.path.join(result_dir, "trajectory.json"), "w") as fp:
         json.dump(trajectory, fp, indent=2)
@@ -401,7 +728,7 @@ def _run_gui_task(agent, env, example: Dict[str, Any], args, result_dir: str) ->
     return {"id": example["id"], "mode": "gui", "score": score, "steps": len(trajectory)}
 
 
-def _run_code_task(env, example: Dict[str, Any], args, llm_config: Dict[str, Any], result_dir: str) -> Dict[str, Any]:
+def run_code_task(env, example: Dict[str, Any], args, llm_config: Dict[str, Any], result_dir: str) -> Dict[str, Any]:
     """Execute one example via LLM-generated code. Returns result dict."""
     proc = current_process().name
     instruction = example["instruction"]
@@ -468,7 +795,7 @@ def _run_code_task(env, example: Dict[str, Any], args, llm_config: Dict[str, Any
 # Worker process
 # ---------------------------------------------------------------------------
 
-def _worker(task_queue, args: argparse.Namespace, shared_results: list,
+def worker(task_queue, args: argparse.Namespace, shared_results: list,
             docker_host: str = None, host_id: str = None):
     """Worker pulled from the task queue. Each task is (example_dict, exec_mode)."""
     proc = current_process().name
@@ -502,9 +829,9 @@ def _worker(task_queue, args: argparse.Namespace, shared_results: list,
             os.makedirs(result_dir, exist_ok=True)
 
             if exec_mode == "gui":
-                res = _run_gui_task(agent, env, example, args, result_dir)
+                res = run_gui_task(agent, env, example, args, result_dir)
             else:
-                res = _run_code_task(env, example, args, llm_config, result_dir)
+                res = run_code_task(env, example, args, llm_config, result_dir)
 
             shared_results.append(res)
 
@@ -548,7 +875,8 @@ def _load_synthetic_examples(args: argparse.Namespace) -> List[Dict[str, Any]]:
     return examples
 
 
-def run_verify(args: argparse.Namespace, examples: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+def run_verify(args: argparse.Namespace, examples: Optional[List[Dict[str, Any]]] = None,
+               memory: Optional[SynthesisMemory] = None) -> List[Dict[str, Any]]:
     """Execute synthetic examples on parallel Docker VMs and evaluate."""
     global _processes
 
@@ -582,7 +910,7 @@ def run_verify(args: argparse.Namespace, examples: Optional[List[Dict[str, Any]]
     _processes = []
     for host, pidx in process_assignments:
         p = Process(
-            target=_worker,
+            target=worker,
             args=(task_queue, args, shared_results, host, f"docker-{pidx}"),
             name=f"SynthWorker-{pidx}",
             daemon=True,
@@ -613,7 +941,7 @@ def run_verify(args: argparse.Namespace, examples: Optional[List[Dict[str, Any]]
 
     results = list(shared_results)
 
-    # Persist aggregated results
+    # Persist all raw verification results
     agg_path = os.path.join(args.output_dir, "verification_results.json")
     with open(agg_path, "w") as f:
         json.dump(results, f, indent=2)
@@ -623,7 +951,75 @@ def run_verify(args: argparse.Namespace, examples: Optional[List[Dict[str, Any]]
     code_scores = [r["score"] for r in results if r.get("mode") == "code" and "error" not in r]
     logger.info("GUI  avg=%.3f (%d tasks)", sum(gui_scores) / max(len(gui_scores), 1), len(gui_scores))
     logger.info("Code avg=%.3f (%d tasks)", sum(code_scores) / max(len(code_scores), 1), len(code_scores))
-    logger.info("Results saved to %s", agg_path)
+
+    # ---- Filter: keep only examples where BOTH gui AND code scored > 0 ----
+    by_id: Dict[str, Dict[str, Any]] = {}
+    for r in results:
+        eid = r["id"]
+        by_id.setdefault(eid, {})[r.get("mode", "unknown")] = r
+
+    verified_dir = os.path.join(args.output_dir, "verified")
+    os.makedirs(verified_dir, exist_ok=True)
+
+    verified_ids = []
+    rejected_ids = []
+    for eid, modes in by_id.items():
+        gui_r = modes.get("gui")
+        code_r = modes.get("code")
+        gui_ok = gui_r is not None and "error" not in gui_r and gui_r.get("score", 0) > 0
+        code_ok = code_r is not None and "error" not in code_r and code_r.get("score", 0) > 0
+
+        if gui_ok and code_ok:
+            verified_ids.append(eid)
+        else:
+            rejected_ids.append(eid)
+            reasons = []
+            if not gui_ok:
+                reasons.append(f"gui={'error' if gui_r and 'error' in gui_r else gui_r.get('score', 'missing') if gui_r else 'not_run'}")
+            if not code_ok:
+                reasons.append(f"code={'error' if code_r and 'error' in code_r else code_r.get('score', 'missing') if code_r else 'not_run'}")
+            logger.info("REJECTED %s: %s", eid, ", ".join(reasons))
+
+    # Record outcomes into synthesis memory
+    if memory is not None:
+        ex_by_id = {ex["id"]: ex for ex in examples}
+        for eid, modes in by_id.items():
+            ex = ex_by_id.get(eid)
+            if ex is None:
+                continue
+            memory.record(
+                example=ex,
+                domain=ex.get("_domain", "unknown"),
+                gui_result=modes.get("gui"),
+                code_result=modes.get("code"),
+                verified=eid in verified_ids,
+            )
+        memory.save()
+
+    # Copy verified examples to verified/ directory
+    verified_manifest = {}
+    for ex in examples:
+        if ex["id"] not in verified_ids:
+            continue
+        domain = ex.get("_domain", "unknown")
+        domain_dir = os.path.join(verified_dir, domain)
+        os.makedirs(domain_dir, exist_ok=True)
+        path = os.path.join(domain_dir, f"{ex['id']}.json")
+        with open(path, "w") as f:
+            json.dump(ex, f, indent=2)
+        verified_manifest.setdefault(domain, []).append(ex["id"])
+
+    # Write verified manifest
+    verified_manifest_path = os.path.join(verified_dir, "manifest.json")
+    with open(verified_manifest_path, "w") as f:
+        json.dump(verified_manifest, f, indent=2)
+
+    logger.info(
+        "Verification complete: %d verified, %d rejected out of %d total",
+        len(verified_ids), len(rejected_ids), len(by_id),
+    )
+    logger.info("Verified examples saved to %s", verified_dir)
+    logger.info("All raw results saved to %s", agg_path)
     return results
 
 
@@ -701,7 +1097,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--screen-width", type=int, default=1920)
     p.add_argument("--screen-height", type=int, default=1080)
     p.add_argument("--sleep-after-execution", type=float, default=2.0)
-    p.add_argument("--max-steps", type=int, default=30)
+    p.add_argument("--max-steps", type=int, default=15,
+                    help="Max steps for GUI/code execution; also guides task complexity during synthesis")
 
     # Parallelism
     p.add_argument("--host-env-config", type=str, default='{"localhost": 2}',
@@ -734,14 +1131,17 @@ def main():
             print(f"  {d}: {n} examples")
         return
 
+    # ---- Load synthesis memory (persists across rounds) ----
+    memory = SynthesisMemory(args.output_dir).load()
+
     # ---- Dispatch by mode ----
     if args.mode in ("synthesize", "full"):
-        examples = run_synthesize(args)
+        examples = run_synthesize(args, memory)
     else:
         examples = None  # verify mode loads from disk
 
     if args.mode in ("verify", "full"):
-        run_verify(args, examples)
+        run_verify(args, examples, memory)
 
 
 if __name__ == "__main__":
