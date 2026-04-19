@@ -6,25 +6,27 @@ Modes:
   verify      - Execute existing synthetic examples on VMs and validate
   full        - Synthesize then verify
 
-Each example is executed on two parallel environments:
-  1. GUI automation  (agent-driven via Qwen3VLWithWM)
-  2. Code execution  (LLM-generated Python snippets)
+Verification is done via code execution: the LLM generates a Python snippet
+that is run on the VM, then the evaluator checks the resulting state.
 
-Parallel VM management follows the pattern in run_multienv_docker.py:
-  multiprocessing workers pull tasks from a shared queue; each worker
-  creates/destroys its own DesktopEnv per task.
+Verification workers are HTTP clients that call the OSGym API server
+(main.py) for VM allocation, stepping, evaluation, and shutdown.
+Multiprocessing workers pull tasks from a shared queue; the API server
+manages Docker VM lifecycle.
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
+import base64
 import datetime
 import glob
 import inspect
 import json
 import logging
 import os
+import re
 import signal
 import sys
 import time
@@ -34,8 +36,8 @@ from dataclasses import dataclass, field
 from multiprocessing import Manager, Process, current_process
 from typing import Any, Dict, List, Optional, Tuple
 
-from desktop_env.desktop_env import DesktopEnv
-from mm_agents.qwen3_vl import Qwen3VLAgent
+import requests as http_requests
+
 from mm_agents.utils.call_llm import call_llm_with_single_response
 from mm_agents.utils.utils import encode_screenshot, parse_json_response
 
@@ -66,11 +68,16 @@ class SynthesisMemory:
       - avoid patterns that consistently fail,
       - steer toward unexplored UI areas.
 
+    Entry lifecycle:
+      executable=False              → script failed static validation
+      executable=True, solvable=False → valid scripts but agent execution failed
+      executable=True, solvable=True  → fully verified via agent execution
+
     File layout (``synthesis_memory.json``):
     ```json
     {
       "entries": [ { ... }, ... ],
-      "stats": { "total": N, "verified": N, "rejected": N }
+      "stats": { "total": N, "executable": N, "solvable": N }
     }
     ```
     """
@@ -78,7 +85,7 @@ class SynthesisMemory:
     def __init__(self, output_dir: str):
         self.path = os.path.join(output_dir, "synthesis_memory.json")
         self.entries: List[Dict[str, Any]] = []
-        self.stats: Dict[str, int] = {"total": 0, "verified": 0, "rejected": 0}
+        self.stats: Dict[str, int] = {"total": 0, "executable": 0, "solvable": 0}
 
     # -- persistence --------------------------------------------------------
 
@@ -88,21 +95,28 @@ class SynthesisMemory:
                 data = json.load(f)
             self.entries = data.get("entries", [])
             self.stats = data.get("stats", self.stats)
-            logger.info("Loaded synthesis memory: %d entries from %s", len(self.entries), self.path)
+            # Migrate old entries that used "verified" instead of
+            # "executable"/"solvable"
+            for e in self.entries:
+                if "executable" not in e and "verified" in e:
+                    e["executable"] = e.pop("verified")
+                if "solvable" not in e:
+                    e["solvable"] = False
+            logger.info(f"Loaded synthesis memory: {len(self.entries)} entries from {self.path}")
         else:
-            logger.info("No existing synthesis memory at %s – starting fresh", self.path)
+            logger.info(f"No existing synthesis memory at {self.path} – starting fresh")
         return self
 
     def save(self) -> None:
         self.stats = {
             "total": len(self.entries),
-            "verified": sum(1 for e in self.entries if e.get("verified")),
-            "rejected": sum(1 for e in self.entries if not e.get("verified")),
+            "executable": sum(1 for e in self.entries if e.get("executable")),
+            "solvable": sum(1 for e in self.entries if e.get("solvable")),
         }
         os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
         with open(self.path, "w") as f:
             json.dump({"entries": self.entries, "stats": self.stats}, f, indent=2)
-        logger.info("Saved synthesis memory (%d entries) to %s", len(self.entries), self.path)
+        logger.info(f"Saved synthesis memory ({len(self.entries)} entries) to {self.path}")
 
     # -- recording ----------------------------------------------------------
 
@@ -110,28 +124,18 @@ class SynthesisMemory:
         self,
         example: Dict[str, Any],
         domain: str,
-        gui_result: Optional[Dict[str, Any]],
         code_result: Optional[Dict[str, Any]],
-        verified: bool,
+        executable: bool,
+        solvable: bool = None,
     ) -> None:
-        gui_score = gui_result.get("score", 0.0) if gui_result else None
         code_score = code_result.get("score", 0.0) if code_result else None
-        gui_error = gui_result.get("error") if gui_result else None
-        code_error = code_result.get("error") if code_result else None
 
         # Build concise failure reasons
         failure_reasons = []
-        if not verified:
-            if gui_score is None or gui_score <= 0:
-                reason = f"gui_score={gui_score}"
-                if gui_error:
-                    reason += f" error={gui_error[:120]}"
-                failure_reasons.append(reason)
-            if code_score is None or code_score <= 0:
-                reason = f"code_score={code_score}"
-                if code_error:
-                    reason += f" error={code_error[:120]}"
-                failure_reasons.append(reason)
+        if not executable:
+            failure_reasons.append("The scripts for either setup or evaluator are not executable")
+        if solvable is not None and not solvable:
+            failure_reasons.append("The generated task can not be solved by code execution verification")
 
         entry = {
             "id": example.get("id", ""),
@@ -139,13 +143,19 @@ class SynthesisMemory:
             "instruction": example.get("instruction", ""),
             "evaluator_eval": example.get("evaluator", {}).get("eval", ""),
             "round_timestamp": datetime.datetime.now().isoformat(),
-            "gui_score": gui_score,
             "code_score": code_score,
-            "gui_steps": gui_result.get("steps") if gui_result else None,
             "code_steps": code_result.get("steps") if code_result else None,
-            "verified": verified,
+            "executable": executable,
+            "solvable": solvable,
             "failure_reasons": failure_reasons,
         }
+
+        # Upsert: update existing entry for the same id, or append new one.
+        eid = entry["id"]
+        for i, existing in enumerate(self.entries):
+            if existing.get("id") == eid:
+                self.entries[i] = entry
+                return
         self.entries.append(entry)
 
     # -- querying -----------------------------------------------------------
@@ -162,26 +172,37 @@ class SynthesisMemory:
         if not domain_entries:
             return ""
 
-        verified = [e for e in domain_entries if e.get("verified")]
-        rejected = [e for e in domain_entries if not e.get("verified")]
+        solvable = [e for e in domain_entries if e.get("solvable")]
+        executable_only = [
+            e for e in domain_entries
+            if e.get("executable") and not e.get("solvable")
+        ]
+        not_executable = [e for e in domain_entries if not e.get("executable")]
 
         lines: List[str] = []
         lines.append(
             f"## Past synthesis experience for \"{domain}\" "
-            f"({len(verified)} verified, {len(rejected)} rejected)\n"
+            f"({len(solvable)} solvable, {len(executable_only)} executable-only, "
+            f"{len(not_executable)} not-executable)\n"
         )
 
-        # --- Verified tasks: show instruction so LLM avoids duplicates ---
-        if verified:
-            lines.append("### Previously VERIFIED tasks (do NOT generate similar ones):")
-            for e in verified[-max_entries:]:
-                lines.append(f"  - \"{e['instruction']}\"  [gui={e.get('gui_score')}, code={e.get('code_score')}]")
+        # --- Solvable tasks: show instruction so LLM avoids duplicates ---
+        if solvable:
+            lines.append("### Previously SOLVABLE tasks (do NOT generate similar ones):")
+            for e in solvable[-max_entries:]:
+                lines.append(
+                    f"  - \"{e['instruction']}\"  "
+                    f"[code_score={e.get('code_score')}]"
+                )
             lines.append("")
 
-        # --- Rejected tasks with failure analysis ---
-        if rejected:
-            lines.append("### Previously REJECTED tasks (learn from these failures):")
-            for e in rejected[-max_entries:]:
+        # --- Executable but not solvable: valid scripts, agent failed ---
+        if executable_only:
+            lines.append(
+                "### Previously EXECUTABLE but NOT SOLVABLE tasks "
+                "(valid scripts, agent execution failed):"
+            )
+            for e in executable_only[-max_entries:]:
                 reasons = "; ".join(e.get("failure_reasons", ["unknown"]))
                 lines.append(
                     f"  - \"{e['instruction']}\"\n"
@@ -190,12 +211,28 @@ class SynthesisMemory:
                 )
             lines.append("")
 
-            # --- Aggregate failure patterns ---
+        # --- Not executable: invalid scripts ---
+        if not_executable:
+            lines.append(
+                "### Previously NOT EXECUTABLE tasks "
+                "(invalid scripts — learn from these):"
+            )
+            for e in not_executable[-max_entries:]:
+                reasons = "; ".join(e.get("failure_reasons", ["unknown"]))
+                lines.append(
+                    f"  - \"{e['instruction']}\"\n"
+                    f"    evaluator: {e.get('evaluator_eval', 'n/a')[:100]}\n"
+                    f"    failure: {reasons}"
+                )
+            lines.append("")
+
+        # --- Aggregate failure patterns from all non-solvable entries ---
+        failed_entries = executable_only + not_executable
+        if failed_entries:
             failure_keywords: Dict[str, int] = {}
-            for e in rejected:
+            for e in failed_entries:
                 for r in e.get("failure_reasons", []):
                     if "error=" in r:
-                        # Extract short error signature
                         err = r.split("error=")[-1][:60]
                         failure_keywords[err] = failure_keywords.get(err, 0) + 1
             if failure_keywords:
@@ -204,7 +241,7 @@ class SynthesisMemory:
                     lines.append(f"  - ({cnt}x) {kw}")
                 lines.append("")
 
-        # --- Coverage summary: which UI areas are already explored ---
+        # --- Coverage summary ---
         all_instructions = [e["instruction"] for e in domain_entries]
         if all_instructions:
             lines.append(
@@ -240,7 +277,7 @@ def discover_domains() -> List[str]:
         d for d in os.listdir(EXAMPLES_DIR)
         if os.path.isdir(os.path.join(EXAMPLES_DIR, d))
     )
-    logger.info("Discovered %d domains: %s", len(domains), domains)
+    logger.info(f"Discovered {len(domains)} domains: {domains}")
     return domains
 
 
@@ -255,7 +292,7 @@ def load_domain_examples(domain: str, max_examples: int = 0) -> DomainInfo:
     for fp in to_load:
         with open(fp, "r") as f:
             info.examples.append(json.load(f))
-    logger.info("Loaded %d/%d examples for domain '%s'", len(info.examples), len(json_files), domain)
+    logger.info(f"Loaded {len(info.examples)}/{len(json_files)} examples for domain '{domain}'")
     return info
 
 
@@ -291,10 +328,7 @@ def catalog_functions() -> FunctionCatalog:
         if callable(obj) and not name.startswith("_"):
             cat.metric_functions.append(_func_info(obj, name))
 
-    logger.info(
-        "Cataloged %d setup, %d getter, %d metric functions",
-        len(cat.setup_functions), len(cat.getter_functions), len(cat.metric_functions),
-    )
+    logger.info(f"Cataloged {len(cat.setup_functions)} setup, {len(cat.getter_functions)} getter, {len(cat.metric_functions)} metric functions")
     return cat
 
 
@@ -304,27 +338,42 @@ def catalog_functions() -> FunctionCatalog:
 
 TASK_GEN_SYSTEM = """You are an expert at generating desktop automation task examples for the OSWorld benchmark.
 
-FOCUS: Generate tasks that **explore the software layout and menus** of each application. \
-The goal is to produce tasks whose execution reveals rich environment dynamics — how the UI \
-reacts to interactions, what state transitions menus trigger, and how panels/toolbars/dialogs \
-rearrange when features are activated. Good tasks exercise the spatial and interactive \
-structure of the application rather than just its data-processing capabilities.
+FOCUS: Generate tasks that **explore the software layout and menus** of each application \
+while producing **concrete, persistent state changes** in the environment. The goal is to \
+produce tasks whose execution reveals rich environment dynamics — how the UI reacts to \
+interactions, what state transitions menus trigger, and how the underlying application or \
+system state is modified. Good tasks exercise both the interactive structure of the \
+application and its ability to alter observable state (files on disk, application \
+configuration, document properties, system settings, installed extensions, etc.).
 
 Prefer tasks that:
+- Change application or document settings that are reflected in configuration files or \
+  application state (e.g., changing the default font in LibreOffice Writer, setting the \
+  tab size in VS Code, enabling autosave)
+- Modify document properties or structure through menu interactions \
+  (e.g., setting page orientation to landscape, inserting a table with specific dimensions, \
+  changing paragraph spacing, adding headers/footers)
+- Toggle or configure features whose effect persists beyond the visual session \
+  (e.g., enabling line numbers, turning on word wrap, activating spell check, setting \
+  a specific zoom level that the application remembers)
+- Navigate through nested menu hierarchies to activate features that alter the working \
+  environment (e.g., Tools > Options > Language Settings to change locale, \
+  Format > Columns > Two to restructure layout)
+- Create, rename, move, or organize files and folders through the application's own UI \
+  (e.g., Save As to a new location, Export as PDF, create a new project folder)
+- Adjust application preferences or workspace configurations that produce side effects \
+  in the file system or internal state (e.g., changing theme, setting a custom dictionary \
+  path, configuring a build command)
+- Use keyboard shortcuts or command palettes to perform actions that have equivalent \
+  menu-driven paths (e.g., Ctrl+Shift+P in VS Code, terminal commands in file managers)
 - Open, close, toggle, or rearrange UI panels, sidebars, toolbars, and status bars \
-  (e.g., View > Show Sidebar, View > Toolbars > Drawing)
-- Navigate through nested menu hierarchies to discover and activate features \
-  (e.g., Tools > Options > Language Settings, Format > Columns > Two)
-- Trigger dialogs, pop-ups, or context menus and interact with their controls \
-  (e.g., Insert > Special Character, right-click > Paragraph Properties)
-- Switch between application modes or views that change the visible layout \
-  (e.g., Normal / Outline / Master view in Impress, Reader / Source in VS Code)
-- Adjust display settings such as zoom, page layout, ruler visibility, or grid snapping
-- Explore tab/workspace management (new tab, split view, tab groups, window tiling)
-- Activate or configure inspectors, property panels, layer dialogs, or developer tools
+  when the resulting layout state is detectable (e.g., sidebar visibility stored in config)
 
-Avoid tasks that are purely data-entry (typing long text, filling spreadsheet cells) \
-or that only read information without changing any UI state.
+Avoid tasks that:
+- Are purely data-entry (typing long text, filling spreadsheet cells)
+- Only read information without changing any state
+- Produce purely transient visual effects that leave no trace once the window is \
+  closed (e.g., hovering over a tooltip, scrolling without changing scroll position settings)
 
 Each task example is a JSON object with these fields:
 - "id": a UUID4 string
@@ -338,7 +387,8 @@ Each task example is a JSON object with these fields:
 
 Rules:
 1. The instruction must be concrete and achievable on an Ubuntu desktop.
-2. The task MUST explore the application's layout, menus, or UI structure.
+2. The task MUST produce a verifiable state change — something that can be confirmed by \
+   inspecting application state, document properties, files on disk, or system configuration.
 3. The config must use ONLY the setup functions provided.
 4. The evaluator "eval" must compose getter and metric functions from the library provided.
 5. Do NOT invent new getter/metric functions unless absolutely necessary.
@@ -372,45 +422,41 @@ def generate_task_examples(
         f"## Complexity budget\n"
         f"Each task must be completable by a GUI agent in at most **{max_steps} steps** "
         f"(each step = one mouse click, keystroke, or typed string). "
-        f"Keep tasks focused on exploring one aspect of the software layout or menu "
-        f"structure per task.\n\n"
+        f"Keep tasks focused — each should explore one aspect of the software and "
+        f"produce a clear, verifiable outcome.\n\n"
         f"{memory_block}"
         f"## Reference examples\n{ref}\n\n"
         f"## Setup functions\n{_fmt_funcs(catalog.setup_functions)}\n\n"
         f"## Getter functions\n{_fmt_funcs(catalog.getter_functions)}\n\n"
         f"## Metric functions\n{_fmt_funcs(catalog.metric_functions)}\n\n"
         f"Generate {num_to_generate} new, diverse task example(s) for \"{domain_info.name}\".\n"
-        f"Each task should explore a different part of the software's layout, menus, or UI "
-        f"panels to maximize coverage of the application's interactive structure.\n"
+        f"Each task should target a different feature or setting of the application, "
+        f"producing a distinct, observable state change that can be verified.\n"
         f"Return a JSON array of task objects."
     )
     messages = [
         {"role": "system", "content": TASK_GEN_SYSTEM},
         {"role": "user", "content": user},
     ]
-    logger.info("Generating %d task example(s) for '%s' ...", num_to_generate, domain_info.name)
-    raw = call_llm_with_single_response(messages=messages, llm_config=llm_config, max_tokens=4096, temperature=0.7)
-    logger.info("LLM response: %d chars", len(raw))
+    
+    # breakpoint()
+    
+    logger.info(f"Generating {num_to_generate} task example(s) for '{domain_info.name}' ...")
+
+    raw = call_llm_with_single_response(messages=messages, llm_config=llm_config, max_tokens=8000, temperature=0.7)
+
+    logger.info(f"LLM response: {len(raw)} chars")
 
     parsed = parse_json_response(raw)
     if parsed is None:
-        import re
-        m = re.search(r"\[.*\]", raw, re.DOTALL)
-        if m:
-            try:
-                parsed = json.loads(m.group(0))
-            except json.JSONDecodeError:
-                logger.error("Failed to parse LLM response as JSON array")
-                return []
-        else:
-            logger.error("No JSON array found in LLM response")
-            return []
+        logger.error("Failed to parse LLM response as JSON")
+        return []
     if isinstance(parsed, dict):
         parsed = [parsed]
     for ex in parsed:
         if not ex.get("id"):
             ex["id"] = str(uuid.uuid4())
-    logger.info("Generated %d example(s)", len(parsed))
+    logger.info(f"Generated {len(parsed)} example(s)")
     return parsed
 
 
@@ -455,14 +501,14 @@ def generate_verifier(
         {"role": "system", "content": VERIFIER_GEN_SYSTEM},
         {"role": "user", "content": user},
     ]
-    logger.info("Generating verifier for: '%s' ...", task_instruction[:80])
-    raw = call_llm_with_single_response(messages=messages, llm_config=llm_config, max_tokens=2048, temperature=0.3)
+    logger.info(f"Generating verifier for: '{task_instruction[:80]}' ...")
+    raw = call_llm_with_single_response(messages=messages, llm_config=llm_config, max_tokens=8000, temperature=0.7)
     parsed = parse_json_response(raw)
     if parsed is None:
         logger.error("Failed to parse verifier response")
         return {"postconfig": [], "eval": ""}
     ev = {"postconfig": parsed.get("postconfig", []), "eval": parsed.get("eval", "")}
-    logger.info("Verifier eval: %s", ev["eval"][:120])
+    logger.info(f"Verifier eval: {ev['eval'][:120]}")
     return ev
 
 
@@ -587,8 +633,9 @@ def run_synthesize(args: argparse.Namespace, memory: Optional[SynthesisMemory] =
 
     for domain in targets:
         logger.info("=" * 60)
-        logger.info("Synthesizing for domain: %s", domain)
+        logger.info(f"Synthesizing for domain: {domain}")
         domain_info = load_domain_examples(domain, max_examples=args.max_ref_examples)
+        
         ref_evaluators = [ex.get("evaluator", {}) for ex in domain_info.examples]
 
         examples = generate_task_examples(
@@ -609,23 +656,21 @@ def run_synthesize(args: argparse.Namespace, memory: Optional[SynthesisMemory] =
             vr = validate_example_scripts(ex, catalog)
             if vr.valid:
                 valid_examples.append(ex)
-            else:
-                logger.warning(
-                    "SCRIPT VALIDATION FAILED for %s: %s – skipping",
-                    ex.get("id", "?"), "; ".join(vr.errors),
+                memory.record(
+                    example=ex, domain=domain,
+                    code_result={"score": 0.0, "error": f"script_validation: {'; '.join(vr.errors)}"},
+                    executable=True,
                 )
-                # Record into memory as a rejected synthesis (no scores)
+            else:
+                logger.warning(f"SCRIPT VALIDATION FAILED for {ex.get('id', '?')}: {'; '.join(vr.errors)} – skipping")
+                # Record into memory as not executable (no scores)
                 if memory is not None:
                     memory.record(
                         example=ex, domain=domain,
-                        gui_result={"score": 0.0, "error": f"script_validation: {'; '.join(vr.errors)}"},
                         code_result={"score": 0.0, "error": f"script_validation: {'; '.join(vr.errors)}"},
-                        verified=False,
+                        executable=False,
                     )
-        logger.info(
-            "Domain '%s': %d/%d examples passed script validation",
-            domain, len(valid_examples), len(examples),
-        )
+        logger.info(f"Domain '{domain}': {len(valid_examples)}/{len(examples)} examples passed script validation")
 
         # Persist only validated examples
         domain_dir = os.path.join(args.output_dir, domain)
@@ -634,7 +679,7 @@ def run_synthesize(args: argparse.Namespace, memory: Optional[SynthesisMemory] =
             path = os.path.join(domain_dir, f"{ex['id']}.json")
             with open(path, "w") as f:
                 json.dump(ex, f, indent=2)
-            logger.info("Saved %s", path)
+            logger.info(f"Saved {path}")
 
         all_examples.extend(valid_examples)
 
@@ -650,206 +695,279 @@ def run_synthesize(args: argparse.Namespace, memory: Optional[SynthesisMemory] =
         manifest.setdefault(d, []).append(ex["id"])
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
-    logger.info("Manifest with %d examples saved to %s", len(all_examples), manifest_path)
+    logger.info(f"Manifest with {len(all_examples)} examples saved to {manifest_path}")
     return all_examples
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Module 4: Parallel Verification Workers  (follows run_multienv_docker.py)
+# Module 4: API Client & Parallel Verification Workers
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def create_environment(args: argparse.Namespace, docker_host: str = None, host_id: str = None):
-    remote_host = None if docker_host == "localhost" else docker_host
-    return DesktopEnv(
-        provider_name=args.provider_name,
-        path_to_vm=args.path_to_vm,
-        action_space=args.action_space,
-        screen_size=(args.screen_width, args.screen_height),
-        headless=args.headless,
-        os_type="Ubuntu",
-        require_a11y_tree=False,
-        remote_host=remote_host,
-        host_id=host_id,
+# ---------------------------------------------------------------------------
+# HTTP helpers – thin wrappers around the OSGym API server (main.py)
+# ---------------------------------------------------------------------------
+
+def _api_reset(server_url: str, task_config: Dict[str, Any], timeout: int = 600) -> Dict[str, Any]:
+    """POST /reset — allocate a VM and reset with the given task config."""
+    resp = http_requests.post(
+        f"{server_url}/reset",
+        json={"task_config": task_config, "timeout": timeout},
+        timeout=timeout,
     )
+    resp.raise_for_status()
+    return resp.json()  # {"screenshot": b64, "problem": str, "vm_id": int}
 
 
-def cleanup_environment(env, tag: str) -> None:
-    if env is not None:
-        try:
-            env.close()
-            logger.info("[%s] Environment closed", tag)
-        except Exception as e:
-            logger.error("[%s] Error closing env: %s", tag, e)
-
-
-def run_gui_task(agent, env, example: Dict[str, Any], args, result_dir: str) -> Dict[str, Any]:
-    """Execute one example via GUI agent. Returns result dict."""
-    proc = current_process().name
-    instruction = example["instruction"]
-    agent.reset(result_dir)
-
-    env.reset(task_config=example)
-    time.sleep(5)
-    obs = env._get_obs()
-
-    trajectory = []
-    done = False
-    step_idx = 0
-
-    while not done and step_idx < args.max_steps:
-        _, thought, action_code = agent.predict(instruction, obs)
-        ts = datetime.datetime.now().strftime("%Y%m%d@%H%M%S")
-        logger.info("[%s][gui] step %d: %s", proc, step_idx, str(action_code)[:100])
-
-        trajectory.append({"step": step_idx, "timestamp": ts, "thought": thought, "action": action_code})
-
-        if action_code in ("DONE", "FAIL"):
-            done = True
-            break
-
-        obs, _, done, info = env.step(action_code, args.sleep_after_execution)
-
-        # Save screenshot
-        if obs.get("screenshot"):
-            with open(os.path.join(result_dir, f"step_{step_idx}_{ts}.png"), "wb") as fp:
-                fp.write(obs["screenshot"])
-        step_idx += 1
-
-    time.sleep(5)
-    score = env.evaluate()
-    logger.info("[%s][gui] score=%.2f for %s", proc, score, example["id"])
-
-    # Persist
-    with open(os.path.join(result_dir, "trajectory.json"), "w") as fp:
-        json.dump(trajectory, fp, indent=2)
-    with open(os.path.join(result_dir, "result.txt"), "w") as fp:
-        fp.write(f"{score}\n")
-    return {"id": example["id"], "mode": "gui", "score": score, "steps": len(trajectory)}
-
-
-def run_code_task(env, example: Dict[str, Any], args, llm_config: Dict[str, Any], result_dir: str) -> Dict[str, Any]:
-    """Execute one example via LLM-generated code. Returns result dict."""
-    proc = current_process().name
-    instruction = example["instruction"]
-
-    env.reset(task_config=example)
-    time.sleep(5)
-    obs = env._get_obs()
-
-    code_system = (
-        "You are a desktop automation agent. Generate a single Python snippet to execute "
-        "on the VM. Available: pyautogui, subprocess, os, time. "
-        "Return ONLY the code. Use 'DONE' when finished, 'FAIL' if infeasible."
+def _api_step(server_url: str, action: str, vm_id: int) -> Dict[str, Any]:
+    """POST /step — send an action to the VM."""
+    resp = http_requests.post(
+        f"{server_url}/step",
+        json={"action": action, "vm_id": vm_id},
+        timeout=120,
     )
+    resp.raise_for_status()
+    return resp.json()  # {"screenshot": b64, "is_finish": bool, "reward": float}
 
-    trajectory = []
-    done = False
-    step_idx = 0
 
-    while not done and step_idx < args.max_steps:
-        history_str = "\n".join(f"Step {t['step']}: {t['code']}" for t in trajectory[-3:])
+def _api_evaluate(server_url: str, vm_id: int) -> Dict[str, Any]:
+    """POST /evaluate — evaluate the VM."""
+    resp = http_requests.post(
+        f"{server_url}/evaluate",
+        json={"vm_id": vm_id},  
+        timeout=30
+    )
+    resp.raise_for_status()
+    return resp.json()  # {"reward": float}
+
+
+def _api_screenshot(server_url: str, vm_id: int) -> Dict[str, Any]:
+    """GET /screenshot — get current screenshot from the VM."""
+    resp = http_requests.get(
+        f"{server_url}/screenshot",
+        params={"vmId": vm_id},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()  # {"screenshot": b64, "vm_id": int}
+
+
+def _api_shutdown(server_url: str, vm_id: int) -> None:
+    """POST /shutdown — release the VM."""
+    try:
+        http_requests.post(
+            f"{server_url}/shutdown",
+            json={"vm_id": vm_id},
+            timeout=30,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to shutdown VM {vm_id}: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Task execution via the API
+# ---------------------------------------------------------------------------
+
+CODE_EXEC_SYSTEM = """\
+You are a desktop automation agent that solves tasks by generating Python code \
+executed directly on an Ubuntu VM.
+
+## Execution environment
+Your code is run as:
+  python -c "import pyautogui; import time; pyautogui.FAILSAFE = False; <YOUR CODE>"
+This means:
+- `pyautogui` and `time` are already imported — do NOT re-import them.
+- Your snippet is a single inline command string. Use semicolons or exec() for \
+  multi-statement logic. For complex logic you may write: \
+  exec("import os\\nresult = os.popen('ls').read()\\nprint(result)")
+- For modules beyond pyautogui/time (subprocess, os, json, shutil, etc.) you \
+  MUST import them yourself within the snippet.
+- The working directory is the VM user's home (~).
+
+## Capabilities
+You can accomplish tasks through multiple approaches:
+- **GUI automation**: pyautogui for clicks, keyboard shortcuts, typing, scrolling.
+- **Shell commands**: subprocess.run() or os.popen() for CLI operations — \
+  editing config files, installing packages, moving files, using xdotool, \
+  gsettings, dconf, sed, etc.
+- **Direct file manipulation**: Read/write config files, JSON preferences, \
+  XML documents, databases with Python's standard library.
+- **Hybrid**: Combine GUI actions (to open an app or navigate menus) with \
+  direct file/command operations (to set the actual state).
+
+Choose the most reliable approach for each task. Direct file or command-line \
+manipulation is often more reliable than GUI clicking for tasks that change \
+application settings or file contents.
+
+## Evaluation
+After you finish, the system evaluates whether the task was completed by \
+running a verifier. The verifier uses getter functions to inspect the VM state:
+- `get_vm_file(env, config={'path': ...})` — reads a file from the VM
+- `get_vm_command_line(env, config={'command': ...})` — runs a shell command \
+  and checks its output
+- `get_accessibility_tree(env)` — inspects the UI accessibility tree
+- `get_info_from_website(env, config={...})` — extracts data from a web page
+- Various app-specific getters for Chrome preferences, VLC config, VS Code \
+  settings, GIMP config, LibreOffice documents, etc.
+
+The verifier then passes the getter output to a metric function (e.g. \
+`check_json`, `exact_match`, `check_accessibility_tree`) to compare against \
+expected values. Understanding what the verifier checks helps you know exactly \
+what state to produce.
+
+## Response format
+You MUST wrap your code in a markdown ```python code fence. Your response \
+should contain exactly one ```python ... ``` block. The code inside the fence \
+will be extracted and directly inserted to replace <YOUR CODE> in the execution \
+template above. For multi-line logic, use exec(\"\"\"...\"\"\") inside the fence.
+
+Example response:
+```python
+exec(\"\"\"import os
+os.makedirs('/home/user/test', exist_ok=True)
+\"\"\")
+```
+
+You may include brief reasoning before the code fence, but the code fence is \
+mandatory and must contain the complete, self-contained code to execute."""
+
+
+def _build_code_task_context(example: Dict[str, Any]) -> str:
+    """Build the task-specific context block for the code execution agent."""
+    parts = [f"Task: {example['instruction']}"]
+
+    evaluator = example.get("evaluator", {})
+    eval_expr = evaluator.get("eval", "")
+    if eval_expr:
+        parts.append(
+            f"\nVerifier expression (this is how your result will be checked):\n"
+            f"  {eval_expr}\n"
+            f"Make sure your actions produce the exact state this verifier expects."
+        )
+
+    return "\n".join(parts)
+
+
+def _extract_code_from_response(raw: str) -> str:
+    """Extract Python code from the ```python ... ``` fence in the LLM response."""
+    match = re.search(r'```python\s*\n(.*?)```', raw, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    # Fallback: try generic ``` fence
+    match = re.search(r'```\s*\n(.*?)```', raw, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    # No fence found — return stripped raw as last resort
+    logger.warning("No ```python fence found in LLM response, using raw output")
+    return raw.strip()
+
+
+def run_code_task(
+    server_url: str,
+    example: Dict[str, Any],
+    max_steps: int,
+    sleep_after_execution: float,
+    llm_config: Dict[str, Any],
+    result_dir: str,
+) -> Dict[str, Any]:
+    """Execute one example via a single LLM-generated code snippet through the API."""
+    proc = current_process().name
+    task_context = _build_code_task_context(example)
+
+    reset_data = _api_reset(server_url, example)
+    vm_id = reset_data["vm_id"]
+    reward = 0
+
+    try:
+        screenshot = base64.b64decode(reset_data["screenshot"])
+
+        # Build prompt with initial screenshot
         messages = [
-            {"role": "system", "content": code_system},
-            {"role": "user", "content": f"Task: {instruction}\n\nPrevious:\n{history_str}\n\nNext code:"},
+            {"role": "system", "content": CODE_EXEC_SYSTEM},
+            {"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": encode_screenshot(screenshot)}},
+                {"type": "text", "text": task_context},
+            ]},
         ]
-        if obs.get("screenshot"):
-            b64 = encode_screenshot(obs["screenshot"])
-            messages.append({"role": "user", "content": [
-                {"type": "image_url", "image_url": {"url": b64}},
-                {"type": "text", "text": "Current screenshot."},
-            ]})
 
-        raw = call_llm_with_single_response(messages=messages, llm_config=llm_config, max_tokens=1024, temperature=0.2)
-        code = raw.strip().strip("`").strip()
-        if code.startswith("python"):
-            code = code[6:].strip()
+        # Single LLM call to generate the code
+        raw = call_llm_with_single_response(
+            messages=messages, llm_config=llm_config,
+            max_tokens=8000, temperature=0.7,
+        )
+        # breakpoint()
+        code = _extract_code_from_response(raw)
 
         ts = datetime.datetime.now().strftime("%Y%m%d@%H%M%S")
-        logger.info("[%s][code] step %d: %s", proc, step_idx, code[:100])
-        trajectory.append({"step": step_idx, "timestamp": ts, "code": code})
+        logger.info(f"[{proc}][code] generated: {code}")
 
-        if code in ("DONE", "FAIL"):
-            done = True
-            break
+        # Execute the code on the VM
+        step_data = _api_step(server_url, code, vm_id)
+        time.sleep(sleep_after_execution)
 
-        obs, _, done, info = env.step(code, args.sleep_after_execution)
+        screenshot_bytes = base64.b64decode(step_data["screenshot"])
+        with open(os.path.join(result_dir, f"step_0_{ts}.png"), "wb") as fp:
+            fp.write(screenshot_bytes)
 
-        if obs.get("screenshot"):
-            with open(os.path.join(result_dir, f"step_{step_idx}_{ts}.png"), "wb") as fp:
-                fp.write(obs["screenshot"])
-        step_idx += 1
+        # Evaluate
+        time.sleep(5)
+        eval_data = _api_evaluate(server_url, vm_id)
+        reward = eval_data["reward"]
+        logger.info(f"[{proc}][code] score={reward:.2f} for {example['id']}")
 
-    time.sleep(5)
-    score = env.evaluate()
-    logger.info("[%s][code] score=%.2f for %s", proc, score, example["id"])
+        # Save trajectory
+        trajectory = [{"step": 0, "timestamp": ts, "code": code}]
+        with open(os.path.join(result_dir, "trajectory.json"), "w") as fp:
+            json.dump(trajectory, fp, indent=2)
+        with open(os.path.join(result_dir, "result.txt"), "w") as fp:
+            fp.write(f"{reward}\n")
+        return {"id": example["id"], "mode": "code", "score": reward, "steps": 1}
 
-    with open(os.path.join(result_dir, "trajectory.json"), "w") as fp:
-        json.dump(trajectory, fp, indent=2)
-    with open(os.path.join(result_dir, "result.txt"), "w") as fp:
-        fp.write(f"{score}\n")
-    return {"id": example["id"], "mode": "code", "score": score, "steps": len(trajectory)}
+    finally:
+        _api_shutdown(server_url, vm_id)
 
 
 # ---------------------------------------------------------------------------
 # Worker process
 # ---------------------------------------------------------------------------
 
-def worker(task_queue, args: argparse.Namespace, shared_results: list,
-            docker_host: str = None, host_id: str = None):
-    """Worker pulled from the task queue. Each task is (example_dict, exec_mode)."""
+def worker(task_queue, args: argparse.Namespace, shared_results: list):
+    """Worker that pulls examples from the queue and runs code execution."""
     proc = current_process().name
     llm_config = {"model": args.model, "provider": args.provider, "endpoint": args.endpoint}
-    screen_size = (args.screen_width, args.screen_height)
-
-    # Build agent once per worker (reused across tasks in this process)
-    agent = Qwen3VLAgent(
-        screen_size=screen_size, approach="greedy",
-        policy_model=args.policy_model, policy_model_provider=args.policy_model_provider,
-        policy_model_endpoint=args.policy_model_endpoint,
-        logger=logger
-    )
 
     while True:
         try:
-            item = task_queue.get(timeout=5)
+            example = task_queue.get(timeout=5)
         except Exception:
             break  # queue empty / timeout
 
-        example, exec_mode = item
-        env = None
         try:
-            logger.info("[%s] Creating env for %s/%s ...", proc, exec_mode, example["id"])
-            env = create_environment(args, docker_host, host_id)
-
             result_dir = os.path.join(
                 args.output_dir, example.get("_domain", "unknown"),
-                "results", example["id"], exec_mode,
+                "trajectories", example["id"], "code",
             )
             os.makedirs(result_dir, exist_ok=True)
 
-            if exec_mode == "gui":
-                res = run_gui_task(agent, env, example, args, result_dir)
-            else:
-                res = run_code_task(env, example, args, llm_config, result_dir)
-
+            res = run_code_task(
+                args.server_url, example,
+                args.max_steps, args.sleep_after_execution,
+                llm_config, result_dir,
+            )
             shared_results.append(res)
 
         except KeyboardInterrupt:
-            logger.warning("[%s] KeyboardInterrupt", proc)
+            logger.warning(f"[{proc}] KeyboardInterrupt")
             break
         except Exception as e:
-            logger.error("[%s] Error on %s/%s: %s", proc, exec_mode, example["id"], e)
+            logger.error(f"[{proc}] Error on code/{example['id']}: {e}")
             logger.error(traceback.format_exc())
-            shared_results.append({"id": example["id"], "mode": exec_mode, "score": 0.0, "error": str(e)})
-        finally:
-            cleanup_environment(env, proc)
 
-    logger.info("[%s] Worker finished", proc)
+    logger.info(f"[{proc}] Worker finished")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Verify stage: parallel execution & evaluation
+# Verify stage: execution & evaluation
 # ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -870,56 +988,134 @@ def _load_synthetic_examples(args: argparse.Namespace) -> List[Dict[str, Any]]:
                 ex.setdefault("_domain", domain)
                 examples.append(ex)
             else:
-                logger.warning("Example file not found: %s", path)
-    logger.info("Loaded %d synthetic examples from %s", len(examples), manifest_path)
+                logger.warning(f"Example file not found: {path}")
+    logger.info(f"Loaded {len(examples)} synthetic examples from {manifest_path}")
     return examples
 
 
-def run_verify(args: argparse.Namespace, examples: Optional[List[Dict[str, Any]]] = None,
-               memory: Optional[SynthesisMemory] = None) -> List[Dict[str, Any]]:
-    """Execute synthetic examples on parallel Docker VMs and evaluate."""
+# ---------------------------------------------------------------------------
+# Result processing (shared by both verify modes)
+# ---------------------------------------------------------------------------
+
+def _process_verify_results(
+    results: List[Dict[str, Any]],
+    examples: List[Dict[str, Any]],
+    args: argparse.Namespace,
+    memory: Optional[SynthesisMemory],
+) -> List[Dict[str, Any]]:
+    """Aggregate results, update memory, write solvable examples. Returns results."""
+
+    # Persist all raw verification results
+    agg_path = os.path.join(args.output_dir, "verification_results.json")
+    with open(agg_path, "w") as f:
+        json.dump(results, f, indent=2)
+
+    # Summary
+    code_scores = [r["score"] for r in results if "error" not in r]
+    avg = sum(code_scores) / max(len(code_scores), 1)
+    logger.info(f"Code avg={avg:.3f} ({len(code_scores)} tasks)")
+
+    # ---- Classify results into solvable / unsolvable / errored ----
+    by_id: Dict[str, Any] = {}
+    for r in results:
+        by_id[r["id"]] = r
+
+    solvable_dir = os.path.join(args.output_dir, "solvable")
+    os.makedirs(solvable_dir, exist_ok=True)
+
+    solvable_ids = []
+    unsolvable_ids = []
+    errored_ids = []   # execution crashed — leave solvable=None so they retry
+    for eid, code_r in by_id.items():
+        if "error" in code_r:
+            # Execution itself failed (network, VM crash, etc.) — not a
+            # definitive verdict on solvability, should be retried.
+            errored_ids.append(eid)
+            logger.info(f"ERRORED {eid}: {code_r['error']}")
+        elif code_r.get("score", 0) > 0:
+            solvable_ids.append(eid)
+        else:
+            unsolvable_ids.append(eid)
+            logger.info(f"UNSOLVABLE {eid}: code_score={code_r.get('score', 'missing')}")
+
+    # Record outcomes into synthesis memory
+    if memory is not None:
+        ex_by_id = {ex["id"]: ex for ex in examples}
+        for eid, code_r in by_id.items():
+            ex = ex_by_id.get(eid)
+            if ex is None:
+                continue
+            if eid in errored_ids:
+                # Keep solvable=None so the filter will pick them up next run
+                solvable = None
+            else:
+                solvable = eid in solvable_ids
+            memory.record(
+                example=ex,
+                domain=ex.get("_domain", "unknown"),
+                code_result=code_r,
+                executable=True,
+                solvable=solvable,
+            )
+        memory.save()
+
+    # Copy solvable examples to solvable/ directory
+    solvable_manifest = {}
+    for ex in examples:
+        if ex["id"] not in solvable_ids:
+            continue
+        domain = ex.get("_domain", "unknown")
+        domain_dir = os.path.join(solvable_dir, domain)
+        os.makedirs(domain_dir, exist_ok=True)
+        path = os.path.join(domain_dir, f"{ex['id']}.json")
+        with open(path, "w") as f:
+            json.dump(ex, f, indent=2)
+        solvable_manifest.setdefault(domain, []).append(ex["id"])
+
+    # Write solvable manifest
+    solvable_manifest_path = os.path.join(solvable_dir, "manifest.json")
+    with open(solvable_manifest_path, "w") as f:
+        json.dump(solvable_manifest, f, indent=2)
+
+    logger.info(f"Verification complete: {len(solvable_ids)} solvable, {len(unsolvable_ids)} unsolvable, {len(errored_ids)} errored (will retry) out of {len(by_id)} total")
+    logger.info(f"Solvable examples saved to {solvable_dir}")
+    logger.info(f"All raw results saved to {agg_path}")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Parallel verification (--verify-mode run)
+# ---------------------------------------------------------------------------
+
+def _run_verify_parallel(
+    args: argparse.Namespace,
+    examples: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Multi-process verification: workers pull examples from a queue and run code execution."""
     global _processes
 
-    if examples is None:
-        examples = _load_synthetic_examples(args)
-    if not examples:
-        logger.error("No examples to verify")
-        return []
-
-    # Parse host config  e.g. '{"localhost": 4}'
-    host_config = json.loads(args.host_env_config)
-    process_assignments = []
-    idx = 0
-    for host, n in host_config.items():
-        for _ in range(n):
-            process_assignments.append((host, idx))
-            idx += 1
-    total_workers = len(process_assignments)
-    logger.info("Verification: %d examples x 2 modes = %d tasks across %d workers",
-                len(examples), len(examples) * 2, total_workers)
+    total_workers = args.num_workers
+    logger.info(f"Verification (parallel): {len(examples)} examples across {total_workers} workers")
 
     manager = Manager()
     shared_results = manager.list()
     task_queue = manager.Queue()
 
-    # Enqueue (example, mode) pairs -- gui first, then code
     for ex in examples:
-        task_queue.put((ex, "gui"))
-        task_queue.put((ex, "code"))
+        task_queue.put(ex)
 
     _processes = []
-    for host, pidx in process_assignments:
+    for pidx in range(total_workers):
         p = Process(
             target=worker,
-            args=(task_queue, args, shared_results, host, f"docker-{pidx}"),
+            args=(task_queue, args, shared_results),
             name=f"SynthWorker-{pidx}",
             daemon=True,
         )
         p.start()
         _processes.append(p)
-        logger.info("Started %s (PID %d, host=%s)", p.name, p.pid, host)
+        logger.info(f"Started {p.name} (PID {p.pid})")
 
-    # Monitor
     try:
         while True:
             if task_queue.empty():
@@ -939,88 +1135,91 @@ def run_verify(args: argparse.Namespace, examples: Optional[List[Dict[str, Any]]
         except Exception:
             pass
 
-    results = list(shared_results)
+    return list(shared_results)
 
-    # Persist all raw verification results
-    agg_path = os.path.join(args.output_dir, "verification_results.json")
-    with open(agg_path, "w") as f:
-        json.dump(results, f, indent=2)
 
-    # Summary
-    gui_scores = [r["score"] for r in results if r.get("mode") == "gui" and "error" not in r]
-    code_scores = [r["score"] for r in results if r.get("mode") == "code" and "error" not in r]
-    logger.info("GUI  avg=%.3f (%d tasks)", sum(gui_scores) / max(len(gui_scores), 1), len(gui_scores))
-    logger.info("Code avg=%.3f (%d tasks)", sum(code_scores) / max(len(code_scores), 1), len(code_scores))
+# ---------------------------------------------------------------------------
+# Sequential verification (--verify-mode debug)
+# ---------------------------------------------------------------------------
 
-    # ---- Filter: keep only examples where BOTH gui AND code scored > 0 ----
-    by_id: Dict[str, Dict[str, Any]] = {}
-    for r in results:
-        eid = r["id"]
-        by_id.setdefault(eid, {})[r.get("mode", "unknown")] = r
+def _run_verify_sequential(
+    args: argparse.Namespace,
+    examples: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Sequential verification in the main process (debugger-friendly)."""
+    logger.info(f"Verification (sequential/debug): {len(examples)} examples")
 
-    verified_dir = os.path.join(args.output_dir, "verified")
-    os.makedirs(verified_dir, exist_ok=True)
+    llm_config = {"model": args.model, "provider": args.provider, "endpoint": args.endpoint}
+    results: List[Dict[str, Any]] = []
 
-    verified_ids = []
-    rejected_ids = []
-    for eid, modes in by_id.items():
-        gui_r = modes.get("gui")
-        code_r = modes.get("code")
-        gui_ok = gui_r is not None and "error" not in gui_r and gui_r.get("score", 0) > 0
-        code_ok = code_r is not None and "error" not in code_r and code_r.get("score", 0) > 0
+    for ex_idx, example in enumerate(examples):
+        logger.info(f"[{ex_idx + 1}/{len(examples)}] Running code for {example['id']} ({example.get('instruction', '')})")
+        result_dir = os.path.join(
+            args.output_dir, example.get("_domain", "unknown"),
+            "trajectories", example["id"], "code",
+        )
+        os.makedirs(result_dir, exist_ok=True)
 
-        if gui_ok and code_ok:
-            verified_ids.append(eid)
-        else:
-            rejected_ids.append(eid)
-            reasons = []
-            if not gui_ok:
-                reasons.append(f"gui={'error' if gui_r and 'error' in gui_r else gui_r.get('score', 'missing') if gui_r else 'not_run'}")
-            if not code_ok:
-                reasons.append(f"code={'error' if code_r and 'error' in code_r else code_r.get('score', 'missing') if code_r else 'not_run'}")
-            logger.info("REJECTED %s: %s", eid, ", ".join(reasons))
-
-    # Record outcomes into synthesis memory
-    if memory is not None:
-        ex_by_id = {ex["id"]: ex for ex in examples}
-        for eid, modes in by_id.items():
-            ex = ex_by_id.get(eid)
-            if ex is None:
-                continue
-            memory.record(
-                example=ex,
-                domain=ex.get("_domain", "unknown"),
-                gui_result=modes.get("gui"),
-                code_result=modes.get("code"),
-                verified=eid in verified_ids,
+        try:
+            res = run_code_task(
+                args.server_url, example,
+                args.max_steps, args.sleep_after_execution,
+                llm_config, result_dir,
             )
-        memory.save()
+            results.append(res)
+        except KeyboardInterrupt:
+            logger.warning("KeyboardInterrupt — stopping verification")
+            return results
+        except Exception as e:
+            logger.error(f"Error on code/{example['id']}: {e}")
+            logger.error(traceback.format_exc())
+            results.append({
+                "id": example["id"], "mode": "code",
+                "score": 0.0, "error": str(e),
+            })
 
-    # Copy verified examples to verified/ directory
-    verified_manifest = {}
-    for ex in examples:
-        if ex["id"] not in verified_ids:
-            continue
-        domain = ex.get("_domain", "unknown")
-        domain_dir = os.path.join(verified_dir, domain)
-        os.makedirs(domain_dir, exist_ok=True)
-        path = os.path.join(domain_dir, f"{ex['id']}.json")
-        with open(path, "w") as f:
-            json.dump(ex, f, indent=2)
-        verified_manifest.setdefault(domain, []).append(ex["id"])
-
-    # Write verified manifest
-    verified_manifest_path = os.path.join(verified_dir, "manifest.json")
-    with open(verified_manifest_path, "w") as f:
-        json.dump(verified_manifest, f, indent=2)
-
-    logger.info(
-        "Verification complete: %d verified, %d rejected out of %d total",
-        len(verified_ids), len(rejected_ids), len(by_id),
-    )
-    logger.info("Verified examples saved to %s", verified_dir)
-    logger.info("All raw results saved to %s", agg_path)
     return results
+
+
+# ---------------------------------------------------------------------------
+# Verify dispatcher
+# ---------------------------------------------------------------------------
+
+def run_verify(args: argparse.Namespace, examples: Optional[List[Dict[str, Any]]] = None,
+               memory: Optional[SynthesisMemory] = None) -> List[Dict[str, Any]]:
+    """Execute synthetic examples on VMs via the API server and evaluate.
+
+    Dispatches to parallel (--verify-mode run) or sequential
+    (--verify-mode debug) execution based on the CLI flag.
+    """
+    if examples is None:
+        examples = _load_synthetic_examples(args)
+    if not examples:
+        logger.error("No examples to verify")
+        return []
+
+    # Filter: only verify examples whose solvable status is still unknown
+    if memory is not None:
+        already_tested = {
+            e["id"] for e in memory.entries
+            if e.get("solvable") is not None
+        }
+        before = len(examples)
+        examples = [ex for ex in examples if ex["id"] not in already_tested]
+        if before != len(examples):
+            logger.info(f"Skipped {before - len(examples)} already-verified examples ({len(examples)} remaining)")
+    if not examples:
+        logger.info("All examples already verified — nothing to do")
+        return []
+
+    # Dispatch based on verify mode
+    verify_mode = getattr(args, "verify_mode", "run")
+    if verify_mode == "debug":
+        results = _run_verify_sequential(args, examples)
+    else:
+        results = _run_verify_parallel(args, examples)
+
+    return _process_verify_results(results, examples, args, memory)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1055,7 +1254,7 @@ def _signal_handler(signum, frame):
     if _is_terminating:
         return
     _is_terminating = True
-    logger.info("Signal %d received - shutting down", signum)
+    logger.info(f"Signal {signum} received - shutting down")
     _cleanup_processes(_processes)
     sys.exit(1)
 
@@ -1083,29 +1282,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--provider", type=str, default="bedrock")
     p.add_argument("--endpoint", type=str, default="")
 
-    # Agent / policy model (for GUI trajectories)
-    p.add_argument("--policy-model", type=str, default="")
-    p.add_argument("--policy-model-provider", type=str, default="")
-    p.add_argument("--policy-model-endpoint", type=str, default="")
+    # API server
+    p.add_argument("--server-url", type=str, default="http://localhost:20000",
+                    help="URL of the OSGym API server (main.py)")
 
-
-    # Environment
-    p.add_argument("--provider-name", type=str, default="docker")
-    p.add_argument("--path-to-vm", type=str, default=None)
-    p.add_argument("--headless", action="store_true")
-    p.add_argument("--action-space", type=str, default="pyautogui")
-    p.add_argument("--screen-width", type=int, default=1920)
-    p.add_argument("--screen-height", type=int, default=1080)
+    # Execution
     p.add_argument("--sleep-after-execution", type=float, default=2.0)
     p.add_argument("--max-steps", type=int, default=15,
-                    help="Max steps for GUI/code execution; also guides task complexity during synthesis")
+                    help="Max steps for code execution; also guides task complexity during synthesis")
 
-    # Parallelism
-    p.add_argument("--host-env-config", type=str, default='{"localhost": 2}',
-                    help='JSON: {"host": num_workers, ...}')
+    # Parallelism / verification mode
+    p.add_argument("--num-workers", type=int, default=2,
+                    help="Number of parallel worker processes for verification")
+    p.add_argument("--verify-mode", choices=["run", "debug"], default="run",
+                    help="'run' = multi-process workers (production), "
+                         "'debug' = sequential in main process (debugger-friendly)")
 
     # Output
-    p.add_argument("--output-dir", type=str, default="synthetic_output")
+    p.add_argument("--output-dir", type=str, default="synthetic_evaluation_examples")
     p.add_argument("--log-level", type=str, default="INFO",
                     choices=["DEBUG", "INFO", "WARNING", "ERROR"])
 

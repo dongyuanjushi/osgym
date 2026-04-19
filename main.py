@@ -13,7 +13,7 @@ from desktop_env.desktop_env import DesktopEnv
 from fastapi import FastAPI, Request, Query, responses, HTTPException, status
 from pydantic import BaseModel
 from typing import Any, Dict, List, Union
-
+import ast
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -51,11 +51,30 @@ logger.addHandler(sdebug_handler)
 #  }}} Logger Configs # 
 
 logger = logging.getLogger("desktopenv.main")
-available_vms: List[int] = list(range(32, -1, -1)) # at most 2 VMs for each worker
+available_vms: List[int] = list(range(16, -1, -1)) # at most 2 VMs for each worker
 active_vms: List[int] = []
 vm_map: Dict[str, Dict[str, Any]] = {}
 vm_lock = threading.Lock()
 _cleanup_registered = False
+
+def encode_screenshot(screenshot: Union[bytes, str]) -> str:
+    if isinstance(screenshot, bytes):
+        base_64_str = base64.b64encode(screenshot).decode("utf-8")
+        return "data:image/jpeg;base64," + base_64_str
+    elif isinstance(screenshot, str):
+        bytes_obj = bytes_literal_to_bytesio(screenshot)
+        base_64_str = base64.b64encode(bytes_obj).decode("utf-8")
+        return "data:image/jpeg;base64," + base_64_str
+    else:
+        raise ValueError("type of screenshot is not supported, only bytes or str is supported")
+
+def bytes_literal_to_bytesio(bytes_literal_str):
+    bytes_obj = ast.literal_eval(bytes_literal_str)
+
+    if not isinstance(bytes_obj, bytes):
+        raise ValueError("not a valid bytes literal")
+
+    return bytes_obj
 
 def _cleanup_all_vms():
     """
@@ -101,6 +120,9 @@ class StepRequest(BaseModel):
 class ShutdownRequest(BaseModel):
     vm_id: Union[int, str]
 
+class EvaluateRequest(BaseModel):
+    vm_id: int
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Register cleanup handlers
@@ -130,8 +152,8 @@ async def screenshot(vm_id: int = Query(..., alias="vmId")):
         obs = vm_env.render()
         logger.info(f"Taking screenshot for VM ID: {vm_id}")
         return {
-            "screenshot": base64.b64encode(obs["screenshot"]),
-            "vm_id": vm_id,
+            "screenshot": base64.b64encode(obs["screenshot"]).decode("utf-8"),
+            "vm_id": vm_id
         }
     except Exception as e:
         logger.error(f"Error taking screenshot for VM ID {vm_id}: {e}")
@@ -150,14 +172,25 @@ async def reset(request: ResetRequest):
         obs = await _get_vm_env(vm_id).reset(task_config)
         logger.info(f"Successfully reset, VM ID: {vm_id} with task config: {task_config}")
         return {
-            "screenshot": base64.b64encode(obs["screenshot"]),
+            "screenshot": base64.b64encode(obs["screenshot"]).decode("utf-8"),
             "problem": obs["instruction"],
-            "vm_id": vm_id,
+            "vm_id": vm_id
         }
     except Exception as e:
         logger.error(f"Error resetting VM: {e}")
         return responses.JSONResponse(status_code=400, content={"message": str(e)})
 
+@app.post("/evaluate")
+async def evaluate(request: EvaluateRequest):
+    try:
+        vm_id = request.vm_id
+        vm_env = _get_vm_env(vm_id)
+        reward = await vm_env.evaluate()
+        return {"reward": reward}
+    except Exception as e:
+        logger.error(f"Error evaluating VM: {e}")
+        return responses.JSONResponse(status_code=400, content={"message": str(e)})
+    
 @app.post("/step")
 async def step(request: StepRequest):
     try:
@@ -173,10 +206,9 @@ async def step(request: StepRequest):
             reward = await vm_env.evaluate()
             _release_vm(vm_id)
         return {
-            # "screenshot": base64.b64encode(obs["screenshot"]),
-            "screenshot": base64.b64encode(obs["screenshot"]),
+            "screenshot": base64.b64encode(obs["screenshot"]).decode("utf-8"),
             "is_finish": done,
-            "reward": reward,
+            "reward": reward
         }
     except Exception as e:
         logger.error(f"Error stepping VM ID {vm_id}: {e}")
@@ -231,7 +263,7 @@ def _get_available_vm(timeout: int) -> int:
             vm_map[str(vm_id)] = {
                 "env": DesktopEnv (
                     provider_name="docker",
-                    action_space="os_gym",
+                    action_space="pyautogui",
                     require_a11y_tree=False,
                     os_type="Ubuntu",
                 ),
