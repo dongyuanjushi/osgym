@@ -60,3 +60,4 @@ librosa
 gymnasium
 filelock
 tldextract
+chromadb>=0.5

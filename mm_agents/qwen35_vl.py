@@ -1,5 +1,6 @@
 import logging
 import io
+import base64
 from PIL import Image
 from datetime import datetime
 import concurrent.futures
@@ -9,7 +10,7 @@ from .utils.utils import encode_screenshot
 
 from .utils.call_llm import call_llm_with_single_response
 
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Union
 
 import json
 
@@ -17,258 +18,78 @@ from .utils.qwen_vl_utils import smart_resize
 
 from datetime import datetime
 
-tools_def = [
-    {
-        "type": "function",
-        "function": {
-            "name": "key",
-            "description": "Performs key down presses on the arguments passed in order, then performs key releases in reverse order.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "keys": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "List of keys to press in order (e.g., ['ctrl', 'c'])"
-                    }
-                },
-                "required": ["keys"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "type",
-            "description": "Type a string of text on the keyboard.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "text": {
-                        "type": "string",
-                        "description": "The text string to type"
-                    }
-                },
-                "required": ["text"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "mouse_move",
-            "description": "Move the cursor to a specified (x, y) pixel coordinate on the screen.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "coordinate": {
-                        "type": "array",
-                        "items": {"type": "number"},
-                        "minItems": 2,
-                        "maxItems": 2,
-                        "description": "The [x, y] pixel coordinates to move to"
-                    }
-                },
-                "required": ["coordinate"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "left_click",
-            "description": "Click the left mouse button at a specified (x, y) pixel coordinate on the screen.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "coordinate": {
-                        "type": "array",
-                        "items": {"type": "number"},
-                        "minItems": 2,
-                        "maxItems": 2,
-                        "description": "The [x, y] pixel coordinates to click"
-                    }
-                },
-                "required": ["coordinate"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "left_click_drag",
-            "description": "Click and drag the cursor to a specified (x, y) pixel coordinate on the screen.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "coordinate": {
-                        "type": "array",
-                        "items": {"type": "number"},
-                        "minItems": 2,
-                        "maxItems": 2,
-                        "description": "The [x, y] pixel coordinates to drag to"
-                    }
-                },
-                "required": ["coordinate"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "right_click",
-            "description": "Click the right mouse button at a specified (x, y) pixel coordinate on the screen.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "coordinate": {
-                        "type": "array",
-                        "items": {"type": "number"},
-                        "minItems": 2,
-                        "maxItems": 2,
-                        "description": "The [x, y] pixel coordinates to right-click"
-                    }
-                },
-                "required": ["coordinate"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "middle_click",
-            "description": "Click the middle mouse button at a specified (x, y) pixel coordinate on the screen.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "coordinate": {
-                        "type": "array",
-                        "items": {"type": "number"},
-                        "minItems": 2,
-                        "maxItems": 2,
-                        "description": "The [x, y] pixel coordinates to middle-click"
-                    }
-                },
-                "required": ["coordinate"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "double_click",
-            "description": "Double-click the left mouse button at a specified (x, y) pixel coordinate on the screen.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "coordinate": {
-                        "type": "array",
-                        "items": {"type": "number"},
-                        "minItems": 2,
-                        "maxItems": 2,
-                        "description": "The [x, y] pixel coordinates to double-click"
-                    }
-                },
-                "required": ["coordinate"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "triple_click",
-            "description": "Triple-click the left mouse button at a specified (x, y) pixel coordinate on the screen (simulated as double-click since it's the closest action).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "coordinate": {
-                        "type": "array",
-                        "items": {"type": "number"},
-                        "minItems": 2,
-                        "maxItems": 2,
-                        "description": "The [x, y] pixel coordinates to triple-click"
-                    }
-                },
-                "required": ["coordinate"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "scroll",
-            "description": "Performs a scroll of the mouse scroll wheel.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "pixels": {
-                        "type": "number",
-                        "description": "The amount of pixels to scroll (positive for down, negative for up)"
-                    }
-                },
-                "required": ["pixels"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "hscroll",
-            "description": "Performs a horizontal scroll (mapped to regular scroll).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "pixels": {
-                        "type": "number",
-                        "description": "The amount of pixels to scroll horizontally"
-                    }
-                },
-                "required": ["pixels"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "wait",
-            "description": "Wait specified seconds for the change to happen.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "time": {
-                        "type": "number",
-                        "description": "The number of seconds to wait"
-                    }
-                },
-                "required": ["time"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "terminate",
-            "description": "Terminate the current task and report its completion status.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "status": {
-                        "type": "string",
-                        "enum": ["success", "failure"],
-                        "description": "The status of the task completion"
-                    }
-                },
-                "required": ["status"]
-            }
-        }
-    }
-]
-
-
 ACTION_N = 1
 
-SYSTEM_PROMPT_POLICY_MODEL = """You are a helpful assistant that can understand screenshots in the images and take actions in a computer environment to achieve the task. 
-## Tools
+description_prompt = (
+    "Use a mouse and keyboard to interact with the computer GUI and take "
+    "screenshots to complete the user's task."
+)
+
+action_description_prompt = """
+* `key`: Performs key down presses on the arguments passed in order, then performs key releases in reverse order.
+* `type`: Type a string of text on the keyboard.
+* `mouse_move`: Move the cursor to a specified (x, y) pixel coordinate on the screen.
+* `left_click`: Click the left mouse button at a specified (x, y) pixel coordinate on the screen. Optional `text` parameter can specify modifier keys (e.g., "ctrl", "shift", "ctrl+shift") that will be held during the click.
+* `left_click_drag`: Click and drag the cursor to a specified (x, y) pixel coordinate on the screen.
+* `right_click`: Click the right mouse button at a specified (x, y) pixel coordinate on the screen. Optional `text` parameter can specify modifier keys that will be held during the click.
+* `middle_click`: Click the middle mouse button at a specified (x, y) pixel coordinate on the screen. Optional `text` parameter can specify modifier keys that will be held during the click.
+* `double_click`: Double-click the left mouse button at a specified (x, y) pixel coordinate on the screen. Optional `text` parameter can specify modifier keys that will be held during the click.
+* `triple_click`: Triple-click the left mouse button at a specified (x, y) pixel coordinate on the screen (simulated as double-click since it's the closest action). Optional `text` parameter can specify modifier keys that will be held during the click.
+* `scroll`: Performs a scroll of the mouse scroll wheel. Optional `text` parameter can specify a modifier key (e.g., "shift", "ctrl") that will be held during scrolling.
+* `hscroll`: Performs a horizontal scroll (mapped to regular scroll). Optional `text` parameter can specify a modifier key that will be held during scrolling.
+* `wait`: Wait specified seconds for the change to happen.
+* `terminate`: Terminate the current task and report its completion status.
+* `answer`: Answer a question.
+"""
+
+tools_def = {
+    "type": "function",
+    "function": {
+        "name": "computer_use",
+        "description": description_prompt,
+        "parameters": {
+            "properties": {
+                "action": {
+                    "description": action_description_prompt,
+                    "enum": [
+                        "key",
+                        "type",
+                        "mouse_move",
+                        "left_click",
+                        "left_click_drag",
+                        "right_click",
+                        "middle_click",
+                        "double_click",
+                        "triple_click",
+                        "scroll",
+                        "hscroll",
+                        "wait",
+                        "terminate",
+                        "answer",
+                    ],
+                    "type": "string",
+                },
+                "keys": {"description": "Required only by `action=key`.", "type": "array"},
+                "text": {"description": "Required by `action=type` and `action=answer`. Optional for click actions (left_click, right_click, middle_click, double_click, triple_click) to specify modifier keys (e.g., 'ctrl', 'shift', 'ctrl+shift'). Optional for scroll actions (scroll, hscroll) to specify a modifier key (e.g., 'shift', 'ctrl') to hold during scrolling.", "type": "string"},
+                "coordinate": {"description": "(x, y) coordinates.", "type": "array"},
+                "pixels": {"description": "Scroll amount.", "type": "number"},
+                "time": {"description": "Seconds to wait.", "type": "number"},
+                "status": {
+                    "description": "Task status for terminate.",
+                    "type": "string",
+                    "enum": ["success", "failure"],
+                },
+            },
+            "required": ["action"],
+            "type": "object",
+        },
+    },
+}
+
+
+SYSTEM_PROMPT_QWEN35_VL = """"Use a mouse and keyboard to interact with a computer, and take screenshots. 
+This is an interface to a desktop GUI. You do not have access to a terminal or applications menu. You must click on desktop icons to start applications.
+Some applications may take time to start or process actions, so you may need to wait and take successive screenshots to see the results of your actions.
 
 You may call the tools defined below to assist with the given task.
 
@@ -281,14 +102,14 @@ Here are some tips for using the tools:
 - If you tried clicking on a program or link but it failed to load even after waiting, try adjusting your cursor position so that the tip of the cursor visually falls on the element that you want to click.",
 - Make sure to click any buttons, links, icons, etc with the cursor tip in the center of the element. Don't click boxes on their edges unless asked.",
 
-You are provided with function signatures within <tools></tools> XML tags:
+You have access to the following functions:
 <tools>
 """ + json.dumps(tools_def) + """
 </tools>
 
 For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:
 <tool_call>
-{"name": <function-name>, "arguments": <args-json-object>}
+{"name": <function-name>, "parameters": <args-json-object>}
 </tool_call>
 
 ## Response format
@@ -316,11 +137,28 @@ import io
 from PIL import Image
 from io import BytesIO
 
+def _to_screenshot_bytes(screenshot: Union[bytes, str]) -> bytes:
+    """Normalize a screenshot to raw bytes.
+
+    The OSGym FastAPI server returns screenshots as base64-encoded strings
+    in `/reset` and `/step` responses, while the in-process DesktopEnv
+    yields raw bytes. Accept either so the agent works against both.
+    """
+    if isinstance(screenshot, bytes):
+        return screenshot
+    if isinstance(screenshot, str):
+        if screenshot.startswith("data:"):
+            screenshot = screenshot.split(",", 1)[1]
+        return base64.b64decode(screenshot)
+    raise TypeError(f"Unsupported screenshot type: {type(screenshot)}")
+
+
 def process_image(image_bytes):
     """
     Process an image for Qwen VL models (thinking variant).
     Uses a tighter resize cap consistent with the thinking DUN agent.
     """
+    image_bytes = _to_screenshot_bytes(image_bytes)
     image = Image.open(BytesIO(image_bytes))
     width, height = image.size
 
@@ -340,7 +178,7 @@ def process_image(image_bytes):
 
     return processed_bytes
 
-class Qwen3VLAgent:
+class Qwen35VLAgent:
     def __init__(
         self, 
         screen_size: tuple, approach: str, 
@@ -363,7 +201,7 @@ class Qwen3VLAgent:
         messages = [
             {
                 "role": "system",
-                "content": SYSTEM_PROMPT_POLICY_MODEL
+                "content": SYSTEM_PROMPT_QWEN35_VL
             },
             {
                 "role": "user",
@@ -448,8 +286,9 @@ Instruction: {instruction}. """
         pyautogui_code: List[str] = []
 
         try:
-            action = tool_call["name"]
-            args = tool_call["arguments"]
+            args = tool_call["parameters"]
+            
+            action = args["action"]
 
             if action == "left_click":
                 if "coordinate" in args:
@@ -621,7 +460,7 @@ Instruction: {instruction}. """
         return action_candidates
 
     def generate_single_response(self, messages: List[Dict[str, Any]], temperature: float = 0.8):
-        response, cost = call_llm_with_single_response(
+        response = call_llm_with_single_response(
             llm_config={
                 "model": self.policy_model,
                 "provider": self.policy_model_provider,
@@ -631,7 +470,6 @@ Instruction: {instruction}. """
             max_tokens=4000,
             temperature=temperature
         )
-        self.logger.info(f"Cost: {cost}")
         return response
 
     def generate_responses_in_parallel(self, messages: List[Dict[str, Any]], temperature: float = 0.8):
@@ -710,7 +548,7 @@ Instruction: {instruction}. """
             results = [future.result() for future in futures]
             return results
 
-    def reset(self, result_dir: str):
+    def reset(self, result_dir: str = None):
         self.result_dir = result_dir
         self.history = []
         self.screenshots = []
