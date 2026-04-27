@@ -52,6 +52,99 @@ EXAMPLES_DIR = os.path.join(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Domain ↔ getter / metric module maps
+#
+# Goal: when the prompt for a single-app domain (e.g. ``gimp``) is built, we
+# only feed the LLM the getters/metrics that actually apply. Generic helpers
+# stay visible everywhere; cross-app modules (chrome's getters, slides metrics)
+# only show up for the matching domain. ``multi_apps`` is the escape hatch —
+# it sees the full catalog because tasks there span apps.
+#
+# Module names below match ``obj.__module__.rsplit('.', 1)[-1]`` for each
+# function exported from ``desktop_env.evaluators.{getters,metrics}``. Two
+# special leaves carry universal helpers:
+#   - ``"metrics"``: the package __init__ itself (e.g. ``infeasible``).
+#   - ``"getters"``: reserved for the same role on the getters side.
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+# Cross-domain helpers — every single-app domain sees these.
+SHARED_GETTER_MODULES: Tuple[str, ...] = ("file", "general", "misc", "replay")
+SHARED_METRIC_MODULES: Tuple[str, ...] = ("general", "pdf", "others")
+
+# Package-level leaves that always remain in scope. Functions defined directly
+# in ``getters/__init__.py`` or ``metrics/__init__.py`` (such as the
+# ``infeasible`` sentinel metric) carry these as their leaf module name.
+_PACKAGE_ROOT_LEAVES: frozenset = frozenset({"getters", "metrics"})
+
+# Single-app domains → their domain-specific getter modules. Empty tuple means
+# the domain has no domain-specific getter file (it relies entirely on shared
+# modules above). ``multi_apps`` is intentionally absent — it bypasses the
+# filter via the ``"*"`` wildcard handled in ``_filter_for_domain``.
+DOMAIN_GETTER_MODULES: Dict[str, Tuple[str, ...]] = {
+    "chrome":              ("chrome",),
+    "gimp":                ("gimp",),
+    "libreoffice_calc":    ("calc",),
+    "libreoffice_impress": ("impress",),
+    "libreoffice_writer":  (),
+    "os":                  ("info",),
+    "thunderbird":         (),
+    "vlc":                 ("vlc",),
+    "vs_code":             ("vscode",),
+}
+
+# Single-app domains → their domain-specific metric modules. The libreoffice
+# leaf carries cross-suite helpers (``check_libre_locale``) so all three
+# libreoffice domains include it alongside their own.
+DOMAIN_METRIC_MODULES: Dict[str, Tuple[str, ...]] = {
+    "chrome":              ("chrome",),
+    "gimp":                ("gimp",),
+    "libreoffice_calc":    ("libreoffice", "table"),
+    "libreoffice_impress": ("libreoffice", "slides"),
+    "libreoffice_writer":  ("libreoffice", "docs"),
+    "os":                  ("basic_os",),
+    "thunderbird":         ("thunderbird",),
+    "vlc":                 ("vlc",),
+    "vs_code":             ("vscode",),
+}
+
+# Sentinel domain that disables filtering (full catalog rendered for the LLM).
+_FULL_CATALOG_DOMAIN = "multi_apps"
+
+
+def _module_leaf(obj: Any) -> str:
+    """Return the last dotted component of ``obj.__module__``.
+
+    Used to bucket each cataloged function under its source file name (e.g.
+    ``desktop_env.evaluators.getters.chrome`` → ``"chrome"``) so the prompt
+    builder can filter by domain without re-importing the underlying modules.
+    """
+    return getattr(obj, "__module__", "").rsplit(".", 1)[-1]
+
+
+def _filter_for_domain(
+    funcs: List[Dict[str, Any]],
+    domain: str,
+    domain_modules: Dict[str, Tuple[str, ...]],
+    shared_modules: Tuple[str, ...],
+) -> List[Dict[str, Any]]:
+    """Return the subset of ``funcs`` reachable from ``domain``.
+
+    ``multi_apps`` (the cross-app domain) returns the full list unchanged —
+    those tasks legitimately combine functions from many modules. Every other
+    domain restricts to ``shared_modules`` plus its own
+    ``domain_modules[domain]`` entries, with package-root leaves always
+    included so universal sentinels (``infeasible``) stay reachable. An
+    unknown domain falls back to shared-only — safer than exposing the whole
+    surface area when we don't know what's appropriate.
+    """
+    if domain == _FULL_CATALOG_DOMAIN:
+        return list(funcs)
+    allowed = set(shared_modules) | _PACKAGE_ROOT_LEAVES | set(domain_modules.get(domain, ()))
+    return [f for f in funcs if f.get("module") in allowed]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Domain discovery and function cataloging
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -186,6 +279,7 @@ def _func_info(obj, name: str, *, drop_self: bool = False) -> Dict[str, Any]:
         "doc": summary,
         "role": schema.get("role", ""),
         "schema": schema,
+        "module": _module_leaf(obj),
         "_sig": sig,
     }
 
@@ -310,6 +404,26 @@ def generate_task_examples(
     if memory_block:
         memory_block = f"\n{memory_block}\n"
 
+    # Restrict the getter / metric surface area shown to the LLM to what
+    # actually applies to this domain. multi_apps gets the full catalog;
+    # every other domain is limited to its own modules plus the shared
+    # helpers (file/general/misc/replay for getters; general/pdf/others for
+    # metrics). Setup functions are not filtered — they're domain-agnostic
+    # OS plumbing and any task may legitimately call any of them.
+    domain_getters = _filter_for_domain(
+        catalog.getter_functions, domain_info.name,
+        DOMAIN_GETTER_MODULES, SHARED_GETTER_MODULES,
+    )
+    domain_metrics = _filter_for_domain(
+        catalog.metric_functions, domain_info.name,
+        DOMAIN_METRIC_MODULES, SHARED_METRIC_MODULES,
+    )
+    logger.info(
+        f"Domain '{domain_info.name}' prompt scope: "
+        f"{len(domain_getters)}/{len(catalog.getter_functions)} getters, "
+        f"{len(domain_metrics)}/{len(catalog.metric_functions)} metrics"
+    )
+
     user = (
         f"Domain: {domain_info.name}\n"
         f"Existing examples: {len(domain_info.example_files)}\n\n"
@@ -321,8 +435,8 @@ def generate_task_examples(
         f"{memory_block}"
         f"## Reference examples (each shows a complete task with its evaluator)\n{ref}\n\n"
         f"## Setup functions\n{_fmt_funcs(catalog.setup_functions)}\n\n"
-        f"## Getter functions\n{_fmt_funcs(catalog.getter_functions)}\n\n"
-        f"## Metric functions\n{_fmt_funcs(catalog.metric_functions)}\n\n"
+        f"## Getter functions\n{_fmt_funcs(domain_getters)}\n\n"
+        f"## Metric functions\n{_fmt_funcs(domain_metrics)}\n\n"
         f"Generate {num_to_generate} new, diverse task example(s) for "
         f"\"{domain_info.name}\".\n"
         f"Each task must:\n"
@@ -1051,6 +1165,8 @@ def _synthesize_domain(
             f"{len(batch_valid)}/{len(examples)} passed validation "
             f"(progress: {existing_valid + len(session_valid)}/{total_examples})"
         )
+        
+        breakpoint()
 
         if len(batch_valid) == 0:
             empty_streak += 1
