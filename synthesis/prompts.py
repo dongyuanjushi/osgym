@@ -45,9 +45,26 @@ pre-configured documents, projects, downloads folders, or app data of any \
 kind. Every file the task touches must be produced inside `config` BEFORE \
 it is opened or referenced. Typical pattern:
 
-  1. Use `_command_setup(command=[...])` to write the file with `bash -c`, \
-     `tee`, `cat <<EOF`, `printf`, `python -c`, etc. (or `_upload_file_setup` \
-     when a fixture is needed).
+  1. Create the file using ONE of these helpers (prefer the domain-specific \
+     ones — they generate a valid binary file in a single call without \
+     fragile shell heredocs):
+       - `_create_calc_file_setup(path=..., data=[[...], ...], sheet_name=...)` \
+         for libreoffice_calc — produces a real .xlsx with optional initial \
+         cell values.
+       - `_create_writer_file_setup(path=..., paragraphs=[...])` for \
+         libreoffice_writer — produces a real .docx with optional paragraphs.
+       - `_create_impress_file_setup(path=..., slides=[{'title':..., \
+         'content':...}, ...])` for libreoffice_impress — produces a real \
+         .pptx with optional slides.
+       - `_create_gimp_image_setup(path=..., width=..., height=..., \
+         color=..., mode=...)` for gimp — produces a blank raster image \
+         (.png/.jpg/.bmp/...; format inferred from the path's extension).
+       - `_command_setup(command=[...])` as the general-purpose fallback for \
+         everything else (`bash -c`, `tee`, `cat <<EOF`, `printf`, \
+         `python -c`, etc.). Avoid it for the formats above — emitting a \
+         valid .xlsx/.docx/.pptx via shell is brittle.
+       - `_upload_file_setup(files=[{'local_path':..., 'path':...}, ...])` \
+         when a pre-existing local fixture is genuinely needed.
   2. Then use `_open_setup(path=...)` to launch it in the target app.
 
 `_open_setup(path=X)` against a path that no earlier setup entry created \
