@@ -305,17 +305,17 @@ class OpenAICompatEmbedder:
 
 
 def _task_text(instruction: str, evaluator_eval: str = "") -> str:
-    """Canonical text used to embed a task: instruction + verifier signature.
+    """Canonical text used to embed a task: instruction only.
 
-    Including the evaluator expression means two tasks whose instructions read
-    similarly but whose verifiers check different state (e.g. different files
-    or keys) are treated as distinct.
+    Earlier revisions concatenated the verifier expression so tasks with
+    similar instructions but different state checks were treated as distinct.
+    That made dedup too lenient — near-paraphrased instructions slipped
+    through whenever the verifier wording differed. Embedding the instruction
+    alone keeps the catalog focused on what the user is actually asked to do;
+    the ``evaluator_eval`` argument is accepted for backwards-compatible
+    callers but ignored.
     """
-    instr = (instruction or "").strip()
-    ev = (evaluator_eval or "").strip()
-    if ev:
-        return f"{instr}\n\nVERIFIER: {ev}"
-    return instr
+    return (instruction or "").strip()
 
 
 def _cosine(a: Sequence[float], b: Sequence[float]) -> float:
@@ -392,13 +392,7 @@ class VectorDedupStore:
         if not examples:
             return DedupDecision()
 
-        texts = [
-            _task_text(
-                ex.get("instruction", ""),
-                (ex.get("evaluator") or {}).get("eval", ""),
-            )
-            for ex in examples
-        ]
+        texts = [_task_text(ex.get("instruction", "")) for ex in examples]
 
         try:
             embeddings = self.embedder.embed(texts)
@@ -491,7 +485,10 @@ class VectorDedupStore:
 
         instruction = example.get("instruction", "") or ""
         evaluator_eval = (example.get("evaluator") or {}).get("eval", "") or ""
-        text = _task_text(instruction, evaluator_eval)
+        # Embed only the instruction — the evaluator string is preserved on
+        # the Chroma metadata below for diagnostics but doesn't influence
+        # similarity scoring (see ``_task_text``).
+        text = _task_text(instruction)
 
         try:
             emb = self.embedder.embed([text])[0]
