@@ -57,27 +57,28 @@ if [[ "${ENABLE_DEDUP}" == "1" ]]; then
     fi
 fi
 
-# ── Phase 1: Synthesize tasks for each domain ────────────────────────────
-# echo "========== Phase 1: Synthesis =========="
-for domain in "${DOMAINS[@]}"; do
-    echo "--- Synthesizing: ${domain} (target=${TOTAL_EXAMPLES}, batch=${BATCH_SIZE}) ---"
-    python -m synthesis.cli \
-        --mode synthesize \
-        --domains "${domain}" \
-        --total-examples "${TOTAL_EXAMPLES}" \
-        --batch-size "${BATCH_SIZE}" \
-        --max-empty-batches "${MAX_EMPTY_BATCHES}" \
-        --max-ref-examples "${MAX_REF_EXAMPLES}" \
-        --model "${MODEL}" \
-        --provider "${PROVIDER}" \
-        --endpoint "${ENDPOINT}" \
-        --max-steps "${MAX_STEPS}" \
-        --synthesize-workers "${synthesize_workers}" \
-        --verification-workers "${verification_workers}" \
-        --synthesize-mode "${SYNTHESIZE_MODE}" \
-        --verification-mode "${VERIFICATION_MODE}" \
-        --output-dir "${OUTPUT_DIR}" \
-        ${dedup_args[@]+"${dedup_args[@]}"}
-done
+# ── Phase 1: Synthesize tasks across every domain in a single run ────────
+# Pass the full DOMAINS list to --domains (argparse nargs="*"). This lets the
+# in-process synthesize_mode dispatcher (sequential vs parallel) decide how to
+# fan out across domains, instead of the shell forking a fresh Python process
+# per domain.
+echo "--- Synthesizing: ${DOMAINS[*]} (target=${TOTAL_EXAMPLES}, batch=${BATCH_SIZE}) ---"
+python -m synthesis.cli \
+    --mode synthesize \
+    --domains "${DOMAINS[@]}" \
+    --total-examples "${TOTAL_EXAMPLES}" \
+    --batch-size "${BATCH_SIZE}" \
+    --max-empty-batches "${MAX_EMPTY_BATCHES}" \
+    --max-ref-examples "${MAX_REF_EXAMPLES}" \
+    --model "${MODEL}" \
+    --provider "${PROVIDER}" \
+    --endpoint "${ENDPOINT}" \
+    --max-steps "${MAX_STEPS}" \
+    --synthesize-workers "${synthesize_workers}" \
+    --verification-workers "${verification_workers}" \
+    --synthesize-mode "${SYNTHESIZE_MODE}" \
+    --verification-mode "${VERIFICATION_MODE}" \
+    --output-dir "${OUTPUT_DIR}" \
+    ${dedup_args[@]+"${dedup_args[@]}"}
 
 echo "========== Done =========="
