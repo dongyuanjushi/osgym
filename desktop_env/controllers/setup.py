@@ -22,6 +22,7 @@ from requests_toolbelt.multipart.encoder import MultipartEncoder
 
 from desktop_env.controllers.python import PythonController
 from desktop_env.evaluators.metrics.utils import compare_urls
+from desktop_env.evaluators.schema import SETUP_SCHEMA_ATTR, setup_action
 
 logger = logging.getLogger("desktopenv.setup")
 
@@ -106,25 +107,14 @@ class SetupController:
             if retry == MAX_RETRIES:
                 return False
 
-        # Create a local namespace with self's methods bound
-        local_namespace = {
-            '_download_setup': self._download_setup,
-            '_upload_file_setup': self._upload_file_setup,
-            '_change_wallpaper_setup': self._change_wallpaper_setup,
-            '_open_setup': self._open_setup,
-            '_launch_setup': self._launch_setup,
-            '_execute_setup': self._execute_setup,
-            '_execute_with_verification_setup': self._execute_with_verification_setup,
-            '_command_setup': self._command_setup,
-            '_sleep_setup': self._sleep_setup,
-            '_activate_window_setup': self._activate_window_setup,
-            '_close_window_setup': self._close_window_setup,
-            '_proxy_setup': self._proxy_setup,
-            '_chrome_open_tabs_setup': self._chrome_open_tabs_setup,
-            '_chrome_close_tabs_setup': self._chrome_close_tabs_setup,
-            '_googledrive_setup': self._googledrive_setup,
-            '_login_setup': self._login_setup,
-            '_update_browse_history_setup': self._update_browse_history_setup,
+        # Auto-discover decorated setup actions. Every method tagged with
+        # ``@setup_action`` is registered as a callable for refactored config
+        # strings; adding a new helper only needs the decorator.
+        local_namespace: Dict[str, Any] = {
+            name: getattr(self, name)
+            for name in dir(self)
+            if name.startswith("_") and name.endswith("_setup")
+            and getattr(getattr(type(self), name, None), SETUP_SCHEMA_ATTR, None) is not None
         }
 
         for i, cmd in enumerate(config):
@@ -148,6 +138,12 @@ class SetupController:
 
         return True
 
+    @setup_action(
+        summary="Fetch remote URLs to the host and push them to literal VM paths.",
+        args={
+            "files": "list of {'url': str, 'path': str}; each url is downloaded then uploaded to path on the VM",
+        },
+    )
     async def _download_setup(self, files: List[Dict[str, str]]):
         """
         Args:
@@ -213,6 +209,12 @@ class SetupController:
             except requests.exceptions.RequestException as e:
                 logger.error("An error occurred while trying to send the request: %s", e)
 
+    @setup_action(
+        summary="Upload host-local files to literal VM paths.",
+        args={
+            "files": "list of {'local_path': str, 'path': str}; each local_path on the host is copied to path on the VM",
+        },
+    )
     async def _upload_file_setup(self, files: List[Dict[str, str]]):
         """
         Args:
@@ -248,6 +250,12 @@ class SetupController:
             except requests.exceptions.RequestException as e:
                 logger.error("An error occurred while trying to send the request: %s", e)
 
+    @setup_action(
+        summary="Set the desktop wallpaper to a file already present on the VM.",
+        args={
+            "path": "absolute path on the VM to an image file already uploaded/installed",
+        },
+    )
     async def _change_wallpaper_setup(self, path: str):
         # if not config:
         # return
@@ -276,6 +284,12 @@ class SetupController:
     async def _tidy_desktop_setup(self, **config):
         raise NotImplementedError()
 
+    @setup_action(
+        summary="Open a file on the VM with its default desktop application (xdg-open).",
+        args={
+            "path": "absolute path on the VM to a file that already exists",
+        },
+    )
     async def _open_setup(self, path: str):
         # if not config:
         # return
@@ -300,6 +314,13 @@ class SetupController:
         except requests.exceptions.RequestException as e:
             logger.error("An error occurred while trying to send the request: %s", e)
 
+    @setup_action(
+        summary="Launch a process on the VM (non-blocking; e.g. an application).",
+        args={
+            "command": "argv list (preferred) or shell string when shell=True",
+            "shell?": "interpret command via shell instead of argv (default False)",
+        },
+    )
     async def _launch_setup(self, command: Union[str, List[str]], shell: bool = False):
         if not command:
             raise Exception("Empty command to launch.")
@@ -320,6 +341,16 @@ class SetupController:
         except requests.exceptions.RequestException as e:
             logger.error("An error occurred while trying to send the request: %s", e)
 
+    @setup_action(
+        summary="Run a command on the VM and wait for it to finish, optionally polling until a condition.",
+        args={
+            "command": "argv list (preferred) or shell string when shell=True; supports {CLIENT_PASSWORD}/{SCREEN_*} placeholders",
+            "stdout?": "filename inside cache_dir to capture stdout to (empty = discard)",
+            "stderr?": "filename inside cache_dir to capture stderr to (empty = discard)",
+            "shell?": "interpret command via shell instead of argv (default False)",
+            "until?": "{'returncode'|'stdout'|'stderr': value}; retry until condition matches or 5 failures",
+        },
+    )
     async def _execute_setup(
             self,
             command: List[str],
@@ -399,9 +430,26 @@ class SetupController:
             if not terminates:
                 time.sleep(0.3)
 
+    @setup_action(
+        summary="Alias of _execute_setup; runs a command on the VM and waits for it.",
+        args={
+            "command": "argv list (preferred) or shell string when shell=True",
+            "kwargs?": "forwarded to _execute_setup (stdout/stderr/shell/until)",
+        },
+    )
     async def _command_setup(self, command: List[str], **kwargs):
         await self._execute_setup(command, **kwargs)
 
+    @setup_action(
+        summary="Run a command on the VM and verify a post-condition (window exists / probe command succeeds).",
+        args={
+            "command": "argv list (preferred) or shell string when shell=True",
+            "verification?": "{'window_exists': str} or {'command_success': List[str]} to assert post-state",
+            "max_wait_time?": "max seconds to wait for verification (default 10)",
+            "check_interval?": "seconds between verification polls (default 1.0)",
+            "shell?": "interpret command via shell instead of argv (default False)",
+        },
+    )
     async def _execute_with_verification_setup(
             self,
             command: List[str],
@@ -453,6 +501,12 @@ class SetupController:
             traceback.print_exc()
             raise Exception(f"Request failed: {e}")
 
+    @setup_action(
+        summary="Pause the setup pipeline for a fixed duration (useful while a launched app finishes loading).",
+        args={
+            "seconds": "non-negative number of seconds to sleep on the host driver",
+        },
+    )
     async def _sleep_setup(self, seconds: float):
         await asyncio.sleep(seconds)
 
@@ -468,6 +522,14 @@ class SetupController:
         # TODO
         raise NotImplementedError()
 
+    @setup_action(
+        summary="Bring an existing X11 window to the foreground on the VM.",
+        args={
+            "window_name": "title (or class when by_class=True) of the window to activate",
+            "strict?": "if True, match the title exactly; otherwise substring match (default False)",
+            "by_class?": "match WM_CLASS instead of WM_NAME (default False)",
+        },
+    )
     async def _activate_window_setup(self, window_name: str, strict: bool = False, by_class: bool = False):
         if not window_name:
             raise Exception(f"Setup Open - Invalid path ({window_name}).")
@@ -487,6 +549,14 @@ class SetupController:
         except requests.exceptions.RequestException as e:
             logger.error("An error occurred while trying to send the request: %s", e)
 
+    @setup_action(
+        summary="Close an X11 window on the VM by name/class.",
+        args={
+            "window_name": "title (or class when by_class=True) of the window to close",
+            "strict?": "if True, match the title exactly; otherwise substring match (default False)",
+            "by_class?": "match WM_CLASS instead of WM_NAME (default False)",
+        },
+    )
     async def _close_window_setup(self, window_name: str, strict: bool = False, by_class: bool = False):
         if not window_name:
             raise Exception(f"Setup Open - Invalid path ({window_name}).")
@@ -506,6 +576,12 @@ class SetupController:
         except requests.exceptions.RequestException as e:
             logger.error("An error occurred while trying to send the request: %s", e)
 
+    @setup_action(
+        summary="Install and start tinyproxy on the VM so the browser can route through 127.0.0.1:18888.",
+        args={
+            "client_password?": "sudo password for the VM user; falls back to controller's client_password",
+        },
+    )
     async def _proxy_setup(self, client_password: str = ""):
         """Setup system-wide proxy configuration
 
@@ -548,6 +624,12 @@ class SetupController:
         logger.info("Proxy setup completed successfully")
 
     # Chrome setup
+    @setup_action(
+        summary="Open URLs as new tabs in the running Chrome on the VM via the CDP debugging port.",
+        args={
+            "urls_to_open": "list of fully-qualified URL strings",
+        },
+    )
     async def _chrome_open_tabs_setup(self, urls_to_open: List[str]):  # Declare as async function
         host = self.vm_ip
         port = self.chromium_port
@@ -592,6 +674,12 @@ class SetupController:
                 # Ensure no sync operations before returning
                 return browser, context
 
+    @setup_action(
+        summary="Close any Chrome tabs whose URL matches one in the list (via the CDP debugging port).",
+        args={
+            "urls_to_close": "list of fully-qualified URL strings; matched with compare_urls",
+        },
+    )
     async def _chrome_close_tabs_setup(self, urls_to_close: List[str]):
         # Changed to async sleep
         await asyncio.sleep(5)  # Wait for Chrome to finish launching asynchronously
@@ -632,6 +720,14 @@ class SetupController:
             return browser, context
 
     # google drive setup
+    @setup_action(
+        summary="Run delete/mkdirs/upload operations against a Google Drive account via PyDrive.",
+        args={
+            "settings_file?": "path to the PyDrive settings.yml (default evaluation_examples/settings/googledrive/settings.yml)",
+            "operation": "list[str], each one of {'delete','mkdirs','upload'}",
+            "args": "list[dict] with one entry per operation; per-op keys: delete=>{query?, trash?}, mkdirs=>{path}, upload=>{url, path}",
+        },
+    )
     async def _googledrive_setup(self, **config):
         """ Clean google drive space (eliminate the impact of previous experiments to reset the environment)
         @args:
@@ -715,6 +811,13 @@ class SetupController:
             else:
                 raise ValueError('[ERROR]: not implemented clean type!')
 
+    @setup_action(
+        summary="Drive a Playwright login flow against a supported platform (currently 'googledrive').",
+        args={
+            "platform": "name of the login flow; supported: 'googledrive'",
+            "settings_file": "path to a JSON file with {'email','password'} for the platform",
+        },
+    )
     async def _login_setup(self, **config):
         """Login to a website using async Playwright API."""
         host = self.vm_ip
@@ -784,6 +887,12 @@ class SetupController:
 
             return browser, context
 
+    @setup_action(
+        summary="Inject fake entries into Chrome's browsing-history SQLite DB on the VM.",
+        args={
+            "history": "list of {'url': str, 'title': str, 'visit_time_from_now_in_seconds': int} entries to insert",
+        },
+    )
     async def _update_browse_history_setup(self, **config):
         cache_path = os.path.join(self.cache_dir, "history_new.sqlite")
         db_url = "https://drive.usercontent.google.com/u/0/uc?id=1Lv74QkJYDWVX0RIgg0Co-DUcoYpVL0oX&export=download" # google drive
@@ -889,3 +998,210 @@ class SetupController:
             logger.error("An error occurred while trying to send the request: %s", e)
 
         self._execute_setup(["sudo chown -R user:user /home/user/.config/google-chrome/Default/History"], shell=True)
+
+    def _upload_local_file_to_vm(self, local_path: str, remote_path: str):
+        """Upload a host-local file to ``remote_path`` on the VM via /setup/upload."""
+        with open(local_path, "rb") as fh:
+            form = MultipartEncoder({
+                "file_path": remote_path,
+                "file_data": (os.path.basename(remote_path), fh),
+            })
+            headers = {"Content-Type": form.content_type}
+            try:
+                response = requests.post(self.http_server + "/setup" + "/upload", headers=headers, data=form)
+                if response.status_code == 200:
+                    logger.info("Uploaded %s -> %s: %s", local_path, remote_path, response.text)
+                else:
+                    logger.error("Failed to upload %s. Status: %s", remote_path, response.text)
+                    raise Exception(f"Upload failed: {response.text}")
+            except requests.exceptions.RequestException as e:
+                logger.error("Upload request error: %s", e)
+                raise
+
+    @setup_action(
+        summary="Create a fresh .xlsx on the VM, optionally pre-filled with literal values.",
+        args={
+            "path": "absolute path on the VM, e.g. '/home/user/Desktop/budget.xlsx'",
+            "data?": "2D list of cell values; row 0 is written to row 1 starting at A1",
+            "sheet_name?": "title of the active sheet",
+        },
+    )
+    async def _create_calc_file_setup(
+            self,
+            path: str,
+            data: Optional[List[List[Any]]] = None,
+            sheet_name: Optional[str] = None,
+    ):
+        """Create an .xlsx spreadsheet on the VM, optionally pre-filled with values.
+
+        Args:
+            path: absolute path on the VM, e.g. "/home/user/Desktop/budget.xlsx".
+            data: 2D list of cell values. Row 0 is written to row 1 starting at A1.
+            sheet_name: optional sheet title.
+        """
+        from openpyxl import Workbook
+
+        if not path:
+            raise Exception("Setup CreateCalc - empty path.")
+
+        wb = Workbook()
+        ws = wb.active
+        if sheet_name:
+            ws.title = sheet_name
+        if data:
+            for row in data:
+                ws.append(list(row))
+
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+            local_path = tmp.name
+        try:
+            wb.save(local_path)
+            self._upload_local_file_to_vm(local_path, path)
+        finally:
+            if os.path.exists(local_path):
+                os.unlink(local_path)
+
+    @setup_action(
+        summary="Create a fresh .docx on the VM, optionally pre-populated with paragraphs.",
+        args={
+            "path": "absolute path on the VM, e.g. '/home/user/Desktop/notes.docx'",
+            "paragraphs?": "list of paragraph strings; each becomes one paragraph",
+            "content?": "alternative single string; split on '\\n' into paragraphs (ignored when paragraphs is set)",
+        },
+    )
+    async def _create_writer_file_setup(
+            self,
+            path: str,
+            paragraphs: Optional[List[str]] = None,
+            content: Optional[str] = None,
+    ):
+        """Create a .docx document on the VM with optional initial text.
+
+        Args:
+            path: absolute path on the VM, e.g. "/home/user/Desktop/notes.docx".
+            paragraphs: list of paragraphs; each becomes its own paragraph.
+            content: alternative single string; split on "\\n" into paragraphs.
+        """
+        from docx import Document
+
+        if not path:
+            raise Exception("Setup CreateWriter - empty path.")
+
+        if paragraphs is None:
+            paragraphs = content.split("\n") if content else []
+
+        doc = Document()
+        for para in paragraphs:
+            doc.add_paragraph(para)
+
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
+            local_path = tmp.name
+        try:
+            doc.save(local_path)
+            self._upload_local_file_to_vm(local_path, path)
+        finally:
+            if os.path.exists(local_path):
+                os.unlink(local_path)
+
+    @setup_action(
+        summary="Create a fresh .pptx on the VM, optionally pre-populated with slides.",
+        args={
+            "path": "absolute path on the VM, e.g. '/home/user/Desktop/deck.pptx'",
+            "slides?": "list of {'title'?: str, 'content'?: str|List[str]}; missing/empty -> single blank slide",
+        },
+    )
+    async def _create_impress_file_setup(
+            self,
+            path: str,
+            slides: Optional[List[Dict[str, Any]]] = None,
+    ):
+        """Create a .pptx presentation on the VM with optional initial slides.
+
+        Args:
+            path: absolute path on the VM, e.g. "/home/user/Desktop/deck.pptx".
+            slides: list of slide dicts, each like
+                {"title": str, "content": str | List[str]}. Missing fields are skipped.
+                If empty/None, a single blank slide is produced.
+        """
+        from pptx import Presentation
+
+        if not path:
+            raise Exception("Setup CreateImpress - empty path.")
+
+        prs = Presentation()
+        slides = slides or [{}]
+        for spec in slides:
+            layout_idx = 1 if spec.get("title") or spec.get("content") else 6
+            layout = prs.slide_layouts[layout_idx] if layout_idx < len(prs.slide_layouts) else prs.slide_layouts[0]
+            slide = prs.slides.add_slide(layout)
+
+            title = spec.get("title")
+            if title and slide.shapes.title is not None:
+                slide.shapes.title.text = title
+
+            body = spec.get("content")
+            if body:
+                placeholder = next(
+                    (ph for ph in slide.placeholders if ph.placeholder_format.idx != 0),
+                    None,
+                )
+                if placeholder is not None:
+                    lines = body if isinstance(body, list) else [body]
+                    tf = placeholder.text_frame
+                    tf.text = lines[0]
+                    for extra in lines[1:]:
+                        tf.add_paragraph().text = extra
+
+        with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as tmp:
+            local_path = tmp.name
+        try:
+            prs.save(local_path)
+            self._upload_local_file_to_vm(local_path, path)
+        finally:
+            if os.path.exists(local_path):
+                os.unlink(local_path)
+
+    @setup_action(
+        summary="Create a blank raster image on the VM that GIMP can open (format inferred from path's extension).",
+        args={
+            "path": "absolute path on the VM, e.g. '/home/user/Desktop/canvas.png'",
+            "width?": "image width in pixels (default 800)",
+            "height?": "image height in pixels (default 600)",
+            "color?": "fill color; PIL color name, '#rrggbb', or [r,g,b]/[r,g,b,a] (default 'white')",
+            "mode?": "PIL mode, e.g. 'RGB' or 'RGBA' (default 'RGB')",
+        },
+    )
+    async def _create_gimp_image_setup(
+            self,
+            path: str,
+            width: int = 800,
+            height: int = 600,
+            color: Union[str, List[int]] = "white",
+            mode: str = "RGB",
+    ):
+        """Create a blank raster image on the VM that GIMP can open.
+
+        Args:
+            path: absolute path on the VM, e.g. "/home/user/Desktop/canvas.png".
+            width, height: image dimensions in pixels.
+            color: fill color — name (e.g. "white"), "#rrggbb", or [r,g,b]/[r,g,b,a].
+            mode: PIL mode, e.g. "RGB" or "RGBA". The output format is inferred
+                from ``path``'s extension (.png/.jpg/.bmp/.tiff/...).
+        """
+        from PIL import Image
+
+        if not path:
+            raise Exception("Setup CreateGimpImage - empty path.")
+
+        fill = tuple(color) if isinstance(color, list) else color
+        img = Image.new(mode, (int(width), int(height)), fill)
+
+        ext = os.path.splitext(path)[1] or ".png"
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            local_path = tmp.name
+        try:
+            img.save(local_path)
+            self._upload_local_file_to_vm(local_path, path)
+        finally:
+            if os.path.exists(local_path):
+                os.unlink(local_path)

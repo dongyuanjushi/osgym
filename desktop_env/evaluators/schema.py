@@ -27,6 +27,7 @@ from typing import Any, Callable, Dict, Optional, TypeVar
 F = TypeVar("F", bound=Callable[..., Any])
 
 SCHEMA_ATTR = "__evaluator_schema__"
+SETUP_SCHEMA_ATTR = "__setup_action_schema__"
 
 
 def evaluator(
@@ -68,6 +69,50 @@ def evaluator(
         return fn
 
     return deco
+
+
+def setup_action(
+    *,
+    args: Optional[Dict[str, str]] = None,
+    returns: str = "",
+    summary: str = "",
+) -> Callable[[F], F]:
+    """Mark a SetupController method as a setup action.
+
+    The dispatcher in ``SetupController.setup`` auto-registers every method
+    bearing this marker, and ``synthesis.task_creator`` uses the same marker
+    to enumerate setup actions and to surface argument descriptions to the
+    LLM prompt. Adding a new helper now only requires decorating it — there
+    is no separate registration table to keep in sync.
+
+    Args:
+        args:    map of parameter name → human description. Suffix the key
+                 with ``"?"`` (e.g. ``"shell?"``) to mark it optional. The
+                 LLM prompt renders these as ``args.<name>: <description>``.
+        returns: plain-language description of the return value, if any.
+        summary: one-line summary; defaults to the function's first
+                 docstring line when omitted.
+    """
+
+    def deco(fn: F) -> F:
+        setattr(fn, SETUP_SCHEMA_ATTR, {
+            "role": "setup",
+            "config": {},
+            "rules": {},
+            "options": {},
+            "args": dict(args or {}),
+            "returns": returns,
+            "summary": summary or _first_doc_line(fn.__doc__),
+            "source": "decorator",
+        })
+        return fn
+
+    return deco
+
+
+def is_setup_action(fn: Callable[..., Any]) -> bool:
+    """True iff ``fn`` carries a ``@setup_action`` schema."""
+    return isinstance(getattr(fn, SETUP_SCHEMA_ATTR, None), dict)
 
 
 _HEADER_ONLY_RE = re.compile(
@@ -199,6 +244,13 @@ def get_schema(fn: Callable[..., Any]) -> Dict[str, Any]:
     decl = getattr(fn, SCHEMA_ATTR, None)
     if isinstance(decl, dict):
         return decl
+
+    setup_decl = getattr(fn, SETUP_SCHEMA_ATTR, None)
+    if isinstance(setup_decl, dict):
+        # Setup-action schemas use the same shape as evaluator schemas so
+        # downstream renderers (``_fmt_funcs``) can iterate uniformly. The
+        # extra ``args`` field is what the setup decorator populates.
+        return setup_decl
 
     doc = inspect.getdoc(fn)
     parsed = parse_docstring_schema(doc)

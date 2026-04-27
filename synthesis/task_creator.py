@@ -300,14 +300,18 @@ def catalog_functions() -> FunctionCatalog:
     cat = FunctionCatalog()
 
     from desktop_env.controllers.setup import SetupController
+    from desktop_env.evaluators.schema import is_setup_action
+    # Enumerate via the ``@setup_action`` marker so the catalog stays in lock-step
+    # with the dispatcher in ``SetupController.setup`` — undecorated stubs (e.g.
+    # NotImplementedError placeholders) are correctly hidden from the LLM and
+    # flagged as unknown by the validator.
     for name in sorted(dir(SetupController)):
-        if name.startswith("_") and name.endswith("_setup"):
-            obj = getattr(SetupController, name)
-            if callable(obj):
-                # SetupController.setup() resolves these via local_namespace
-                # (binding self implicitly), so the LLM never passes self —
-                # drop it from the cataloged signature for binding checks.
-                cat.setup_functions.append(_func_info(obj, name, drop_self=True))
+        obj = getattr(SetupController, name, None)
+        if callable(obj) and is_setup_action(obj):
+            # SetupController.setup() resolves these via local_namespace
+            # (binding self implicitly), so the LLM never passes self —
+            # drop it from the cataloged signature for binding checks.
+            cat.setup_functions.append(_func_info(obj, name, drop_self=True))
 
     from desktop_env.evaluators import getters as gmod
     for name in sorted(dir(gmod)):
@@ -340,8 +344,13 @@ def catalog_functions() -> FunctionCatalog:
 
     g_total, g_decorated, g_empty = _coverage_stats(cat.getter_functions, "config")
     m_total, m_decorated, m_empty = _coverage_stats(cat.metric_functions, "rules")
+    s_total = len(cat.setup_functions)
+    s_decorated = sum(
+        1 for f in cat.setup_functions
+        if (f.get("schema") or {}).get("source") == "decorator"
+    )
     logger.info(
-        f"Cataloged {len(cat.setup_functions)} setup, "
+        f"Cataloged {s_total} setup ({s_decorated} decorated), "
         f"{g_total} getter ({g_decorated} decorated, {g_empty} take config but "
         f"declare no schema keys), "
         f"{m_total} metric ({m_decorated} decorated, {m_empty} take rules but "
@@ -368,7 +377,7 @@ def _fmt_funcs(funcs: List[Dict[str, Any]]) -> str:
     for f in funcs:
         header = f"- {f['signature']}: {f['doc']}"
         schema = f.get("schema") or {}
-        for kind in ("config", "rules", "options"):
+        for kind in ("config", "rules", "options", "args"):
             entries: Dict[str, str] = schema.get(kind, {}) or {}
             if not entries:
                 continue
