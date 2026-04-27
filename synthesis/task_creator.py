@@ -20,7 +20,11 @@ import inspect
 import json
 import logging
 import os
+import threading
+import traceback
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -279,6 +283,7 @@ def generate_task_examples(
     num_to_generate: int = 1,
     max_steps: int = 15,
     memory: Optional[SynthesisMemory] = None,
+    memory_block: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Generate full task examples — instruction + setup config + evaluator —
     in a single LLM call.
@@ -288,15 +293,22 @@ def generate_task_examples(
     (``postconfig`` + ``eval``) already populated. There is no second pass:
     examples without an ``eval`` field are rejected by the static validator
     later in ``run_synthesize``.
+
+    ``memory_block`` is the prior-experience text injected into the user
+    prompt. Callers may pass a pre-formatted block (computed under a lock in
+    parallel mode so the read happens atomically with respect to concurrent
+    ``memory.record`` calls); otherwise it is derived from ``memory`` here.
     """
     ref = json.dumps(domain_info.examples[:5], indent=2)
 
-    # Build memory context (empty string if no prior experience)
-    memory_block = ""
-    if memory is not None:
-        memory_block = memory.format_for_prompt(domain_info.name)
-        if memory_block:
-            memory_block = f"\n{memory_block}\n"
+    # Build memory context (empty string if no prior experience). If the
+    # caller supplied ``memory_block`` directly, use it verbatim — that path
+    # is what parallel-mode workers take, so the LLM call below runs outside
+    # the shared lock.
+    if memory_block is None:
+        memory_block = memory.format_for_prompt(domain_info.name) if memory is not None else ""
+    if memory_block:
+        memory_block = f"\n{memory_block}\n"
 
     user = (
         f"Domain: {domain_info.name}\n"
@@ -856,144 +868,147 @@ def validate_example_scripts(example: Dict[str, Any], catalog: FunctionCatalog) 
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def run_synthesize(
+def _synthesize_domain(
+    domain: str,
     args: argparse.Namespace,
-    memory: Optional[SynthesisMemory] = None,
-    vector_store: Optional[VectorDedupStore] = None,
+    memory: Optional[SynthesisMemory],
+    vector_store: Optional[VectorDedupStore],
     on_batch_complete: Optional[
         Callable[[str, List[Dict[str, Any]]], List[Dict[str, Any]]]
-    ] = None,
+    ],
+    catalog: FunctionCatalog,
+    llm_config: Dict[str, Any],
+    batch_size: int,
+    total_examples: int,
+    max_empty_batches: int,
+    write_lock: Optional[threading.Lock] = None,
 ) -> List[Dict[str, Any]]:
-    """Generate synthetic examples + verifiers via LLM in fixed-size batches.
+    """Run the batched synthesis loop for one domain end-to-end.
 
-    Loops until ``--total-examples`` valid (script-validated, non-duplicate)
-    examples exist in memory for each domain. Between batches, previously-seen
-    instructions are surfaced via ``SynthesisMemory.format_for_prompt`` and
-    near-duplicates of solvable tasks are filtered via ``vector_store``.
+    Per batch: generate via LLM → static-validate → vector-dedup → persist
+    accepted to disk → verify (when ``on_batch_complete`` is set) → record
+    outcomes into ``memory`` and persist memory + vector store. The memory
+    JSON file and the ChromaDB store are flushed once per batch so concurrent
+    domain workers (parallel mode) can pick up the latest state on their
+    next iteration.
 
-    Order of operations per batch:
-      1. Generate, validate, dedup, persist accepted examples to disk.
-      2. Run verification (via ``on_batch_complete``) on accepted examples.
-      3. THEN record every batch outcome — script-invalid, duplicate,
-         executable-only, solvable, errored — into memory in a single pass
-         and persist it. Verification always happens before any memory
-         write so the persisted record reflects the final status.
-
-    ``on_batch_complete`` (optional) returns the verification results for
-    the accepted examples so this function can fold them into memory.
+    ``write_lock`` (optional) — held around every read/write of ``memory``,
+    ``vector_store``, and ``on_batch_complete`` so parallel workers don't
+    corrupt shared state. The LLM call (``generate_task_examples``) and
+    static validation run outside the lock so synthesis stays parallel; only
+    the bookkeeping serializes. Sequential callers pass ``None``.
     """
-    all_domains = discover_domains()
-    catalog = catalog_functions()
-    targets = args.domains if args.domains else all_domains
-    targets = [d for d in targets if d in all_domains]
+    hold = (lambda: write_lock) if write_lock is not None else (lambda: nullcontext())
 
-    llm_config = {"model": args.model, "provider": args.provider, "endpoint": args.endpoint}
-    os.makedirs(args.output_dir, exist_ok=True)
-    all_examples: List[Dict[str, Any]] = []
+    logger.info("=" * 60)
+    logger.info(
+        f"Synthesizing for domain: {domain} "
+        f"(target={total_examples}, batch_size={batch_size})"
+    )
 
-    batch_size = args.batch_size if args.batch_size > 0 else args.num_examples
-    total_examples = args.total_examples if args.total_examples > 0 else args.num_examples
-    max_empty_batches = max(1, args.max_empty_batches)
+    domain_info = load_domain_examples(domain, max_examples=args.max_ref_examples)
+    domain_dir = os.path.join(args.output_dir, domain)
+    os.makedirs(domain_dir, exist_ok=True)
 
-    for domain in targets:
-        logger.info("=" * 60)
-        logger.info(
-            f"Synthesizing for domain: {domain} "
-            f"(target={total_examples}, batch_size={batch_size})"
-        )
-        domain_info = load_domain_examples(domain, max_examples=args.max_ref_examples)
-        domain_dir = os.path.join(args.output_dir, domain)
-        os.makedirs(domain_dir, exist_ok=True)
-
+    with hold():
         existing_valid = sum(
             1 for e in (memory.get_domain_entries(domain) if memory else [])
             if e.get("executable")
         )
-        logger.info(
-            f"Domain '{domain}': {existing_valid} validated examples already in memory"
+    logger.info(
+        f"Domain '{domain}': {existing_valid} validated examples already in memory"
+    )
+
+    session_valid: List[Dict[str, Any]] = []
+    empty_streak = 0
+    batch_idx = 0
+    while existing_valid + len(session_valid) < total_examples:
+        remaining = total_examples - (existing_valid + len(session_valid))
+        n_this_batch = min(batch_size, remaining)
+        batch_idx += 1
+
+        # Snapshot the prior-experience prompt block under the lock so the
+        # read sees a consistent memory snapshot; the LLM call below then
+        # runs OUTSIDE the lock so parallel workers overlap on generation.
+        memory_block: Optional[str] = None
+        if memory is not None:
+            with hold():
+                memory_block = memory.format_for_prompt(domain)
+
+        examples = generate_task_examples(
+            domain_info, catalog, llm_config,
+            n_this_batch, args.max_steps,
+            memory=None, memory_block=memory_block,
         )
 
-        session_valid: List[Dict[str, Any]] = []
-        empty_streak = 0
-        batch_idx = 0
-        while existing_valid + len(session_valid) < total_examples:
-            remaining = total_examples - (existing_valid + len(session_valid))
-            n_this_batch = min(batch_size, remaining)
-            batch_idx += 1
-            # logger.info(
-            #     f"Domain '{domain}' batch {batch_idx}: generating {n_this_batch} "
-            #     f"(progress: {existing_valid + len(session_valid)}/{total_examples})"
-            # )
+        # 1) Static validation (pure CPU work — runs outside the lock)
+        batch_valid: List[Dict[str, Any]] = []
+        statically_invalid: List[Tuple[Dict[str, Any], str]] = []
+        for ex in examples:
+            vr = validate_example_scripts(ex, catalog)
+            if vr.valid:
+                batch_valid.append(ex)
+            else:
+                err = "; ".join(vr.errors)
+                logger.warning(
+                    f"SCRIPT VALIDATION FAILED for {ex.get('id', '?')}: {err} – skipping"
+                )
+                statically_invalid.append((ex, err))
 
-            examples = generate_task_examples(
-                domain_info, catalog, llm_config,
-                n_this_batch, args.max_steps, memory,
-            )
-            # Single-call synthesis emits the evaluator inline, and
-            # generate_task_examples has already stamped id / source /
-            # _domain via _stamp_synthesized_examples. Examples missing
-            # `evaluator.eval` fall through to static validation, which
-            # rejects them with a precise error recorded in synthesis memory.
-
-            # 1) Static validation
-            batch_valid: List[Dict[str, Any]] = []
-            statically_invalid: List[Tuple[Dict[str, Any], str]] = []
-            for ex in examples:
-                vr = validate_example_scripts(ex, catalog)
-                if vr.valid:
-                    batch_valid.append(ex)
-                else:
-                    err = "; ".join(vr.errors)
-                    logger.warning(
-                        f"SCRIPT VALIDATION FAILED for {ex.get('id', '?')}: {err} – skipping"
-                    )
-                    statically_invalid.append((ex, err))
-
-            # 2) Vector-DB dedup
-            duplicates: List[Tuple[Dict[str, Any], Any]] = []
-            
-            # breakpoint()
-            
-            if vector_store is not None and batch_valid:
+        # 2) Vector-DB dedup — locked so the read sees writes from peers'
+        #    add_solvable calls and the per-store collection cache stays
+        #    consistent across threads.
+        duplicates: List[Tuple[Dict[str, Any], Any]] = []
+        if vector_store is not None and batch_valid:
+            with hold():
                 decision = vector_store.filter_batch(domain, batch_valid)
-                if decision.rejected:
+            if decision.rejected:
+                logger.info(
+                    f"DEDUP: rejected {len(decision.rejected)}/"
+                    f"{len(batch_valid)} as near-duplicates"
+                )
+                for ex_rej, match in decision.rejected:
                     logger.info(
-                        f"DEDUP: rejected {len(decision.rejected)}/"
-                        f"{len(batch_valid)} as near-duplicates"
+                        f"  - skip {str(ex_rej.get('id', '?'))[:8]} "
+                        f"sim={match.similarity:.3f} [{match.source}] "
+                        f"-> {str(match.id)[:8]} ({(match.instruction or '')[:80]!r})"
                     )
-                    for ex_rej, match in decision.rejected:
-                        logger.info(
-                            f"  - skip {str(ex_rej.get('id', '?'))[:8]} "
-                            f"sim={match.similarity:.3f} [{match.source}] "
-                            f"-> {str(match.id)[:8]} ({(match.instruction or '')[:80]!r})"
-                        )
-                batch_valid = decision.accepted
-                duplicates = decision.rejected
+            batch_valid = decision.accepted
+            duplicates = decision.rejected
 
-            # 3) Persist accepted examples to disk (verification needs them)
-            for ex in batch_valid:
-                path = os.path.join(domain_dir, f"{ex['id']}.json")
-                with open(path, "w") as f:
-                    json.dump(ex, f, indent=2)
-                logger.info(f"Saved {path}")
+        # 3) Persist accepted examples to disk (unique filenames per id, so
+        #    no cross-thread file collision — runs outside the lock).
+        for ex in batch_valid:
+            path = os.path.join(domain_dir, f"{ex['id']}.json")
+            with open(path, "w") as f:
+                json.dump(ex, f, indent=2)
+            logger.info(f"Saved {path}")
 
-            # 4) Verification first — gather results before touching memory
-            verify_results: Optional[List[Dict[str, Any]]] = None
-            if on_batch_complete is not None and batch_valid:
-                try:
+        # 4) Verification first — gather results before touching memory.
+        #    Locked because _process_verify_results does a read-modify-write
+        #    on verification_results.json / solvable manifest, and pushes
+        #    new entries into the vector store; concurrent calls would
+        #    race on those files and the Chroma collection cache.
+        verify_results: Optional[List[Dict[str, Any]]] = None
+        if on_batch_complete is not None and batch_valid:
+            try:
+                with hold():
                     verify_results = on_batch_complete(domain, batch_valid)
-                except Exception as e:
-                    logger.error(
-                        f"Domain '{domain}' batch {batch_idx}: "
-                        f"on_batch_complete callback failed: {e}"
-                    )
-                    logger.error(
-                        "Continuing synthesis; batch left unverified "
-                        "(rerun --mode verify to pick it up)."
-                    )
+            except Exception as e:
+                logger.error(
+                    f"Domain '{domain}' batch {batch_idx}: "
+                    f"on_batch_complete callback failed: {e}"
+                )
+                logger.error(
+                    "Continuing synthesis; batch left unverified "
+                    "(rerun --mode verify to pick it up)."
+                )
 
-            # 5) Memory record + persist (single pass, after verification)
-            if memory is not None:
+        # 5) Memory record + persist (single pass, after verification).
+        #    memory.save() rewrites the whole JSON file, so this whole block
+        #    must be atomic w.r.t. peer threads.
+        if memory is not None:
+            with hold():
                 for ex, err in statically_invalid:
                     memory.record(
                         example=ex, domain=domain,
@@ -1029,28 +1044,163 @@ def run_synthesize(
                             executable=True, solvable=solvable,
                         )
                 memory.save()
-                
-            # breakpoint()
 
-            session_valid.extend(batch_valid)
-            logger.info(
-                f"Domain '{domain}' batch {batch_idx}: "
-                f"{len(batch_valid)}/{len(examples)} passed validation "
-                f"(progress: {existing_valid + len(session_valid)}/{total_examples})"
-            )
+        session_valid.extend(batch_valid)
+        logger.info(
+            f"Domain '{domain}' batch {batch_idx}: "
+            f"{len(batch_valid)}/{len(examples)} passed validation "
+            f"(progress: {existing_valid + len(session_valid)}/{total_examples})"
+        )
 
-            if len(batch_valid) == 0:
-                empty_streak += 1
-                if empty_streak >= max_empty_batches:
-                    logger.warning(
-                        f"Domain '{domain}': {empty_streak} consecutive batches "
-                        f"yielded no valid examples — stopping early."
-                    )
-                    break
-            else:
-                empty_streak = 0
+        if len(batch_valid) == 0:
+            empty_streak += 1
+            if empty_streak >= max_empty_batches:
+                logger.warning(
+                    f"Domain '{domain}': {empty_streak} consecutive batches "
+                    f"yielded no valid examples — stopping early."
+                )
+                break
+        else:
+            empty_streak = 0
 
-        all_examples.extend(session_valid)
+    return session_valid
+
+
+def _run_synthesize_sequential(
+    args: argparse.Namespace,
+    memory: Optional[SynthesisMemory],
+    vector_store: Optional[VectorDedupStore],
+    on_batch_complete: Optional[
+        Callable[[str, List[Dict[str, Any]]], List[Dict[str, Any]]]
+    ],
+    targets: List[str],
+    catalog: FunctionCatalog,
+    llm_config: Dict[str, Any],
+    batch_size: int,
+    total_examples: int,
+    max_empty_batches: int,
+) -> List[Dict[str, Any]]:
+    """Sequential synthesis: process domains one at a time in the main thread."""
+    logger.info(
+        f"Synthesis (sequential): {len(targets)} domain(s) "
+        f"(target={total_examples}, batch_size={batch_size})"
+    )
+    all_examples: List[Dict[str, Any]] = []
+    for domain in targets:
+        all_examples.extend(_synthesize_domain(
+            domain, args, memory, vector_store, on_batch_complete,
+            catalog, llm_config, batch_size, total_examples,
+            max_empty_batches, write_lock=None,
+        ))
+    return all_examples
+
+
+def _run_synthesize_parallel(
+    args: argparse.Namespace,
+    memory: Optional[SynthesisMemory],
+    vector_store: Optional[VectorDedupStore],
+    on_batch_complete: Optional[
+        Callable[[str, List[Dict[str, Any]]], List[Dict[str, Any]]]
+    ],
+    targets: List[str],
+    catalog: FunctionCatalog,
+    llm_config: Dict[str, Any],
+    batch_size: int,
+    total_examples: int,
+    max_empty_batches: int,
+) -> List[Dict[str, Any]]:
+    """Parallel synthesis: a thread pool runs one domain per worker.
+
+    Threads are appropriate here because the per-batch hot path is dominated
+    by an I/O-bound LLM call (``generate_task_examples``); the synthesis
+    bookkeeping is serialized via a single ``write_lock`` shared by every
+    worker.
+    """
+    num_workers = max(1, min(args.num_workers, len(targets)))
+    logger.info(
+        f"Synthesis (parallel): {len(targets)} domain(s) across "
+        f"{num_workers} worker thread(s) "
+        f"(target={total_examples}, batch_size={batch_size})"
+    )
+
+    write_lock = threading.Lock()
+    all_examples: List[Dict[str, Any]] = []
+
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        future_to_domain = {
+            executor.submit(
+                _synthesize_domain,
+                domain, args, memory, vector_store, on_batch_complete,
+                catalog, llm_config, batch_size, total_examples,
+                max_empty_batches, write_lock,
+            ): domain
+            for domain in targets
+        }
+        for fut in as_completed(future_to_domain):
+            domain = future_to_domain[fut]
+            try:
+                all_examples.extend(fut.result())
+            except Exception as e:
+                logger.error(f"Domain '{domain}' synthesis failed: {e}")
+                logger.error(traceback.format_exc())
+    return all_examples
+
+
+def run_synthesize(
+    args: argparse.Namespace,
+    memory: Optional[SynthesisMemory] = None,
+    vector_store: Optional[VectorDedupStore] = None,
+    on_batch_complete: Optional[
+        Callable[[str, List[Dict[str, Any]]], List[Dict[str, Any]]]
+    ] = None,
+) -> List[Dict[str, Any]]:
+    """Generate synthetic examples + verifiers via LLM in fixed-size batches.
+
+    Loops until ``--total-examples`` valid (script-validated, non-duplicate)
+    examples exist in memory for each domain. Between batches, previously-seen
+    instructions are surfaced via ``SynthesisMemory.format_for_prompt`` and
+    near-duplicates of solvable tasks are filtered via ``vector_store``.
+
+    Order of operations per batch (see ``_synthesize_domain``):
+      1. Generate, validate, dedup, persist accepted examples to disk.
+      2. Run verification (via ``on_batch_complete``) on accepted examples.
+      3. THEN record every batch outcome — script-invalid, duplicate,
+         executable-only, solvable, errored — into memory in a single pass
+         and persist it. Verification always happens before any memory
+         write so the persisted record reflects the final status.
+
+    ``args.synthesize_mode`` selects the dispatcher:
+      - ``"sequential"`` (default): one domain at a time in the main thread.
+      - ``"parallel"``: a thread pool of size ``args.num_workers`` runs one
+        domain per worker; a shared lock serializes memory + vector-store
+        bookkeeping while LLM calls run concurrently.
+
+    ``on_batch_complete`` (optional) returns the verification results for
+    the accepted examples so this function can fold them into memory.
+    """
+    all_domains = discover_domains()
+    catalog = catalog_functions()
+    targets = args.domains if args.domains else all_domains
+    targets = [d for d in targets if d in all_domains]
+
+    llm_config = {"model": args.model, "provider": args.provider, "endpoint": args.endpoint}
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    batch_size = args.batch_size if args.batch_size > 0 else args.num_examples
+    total_examples = args.total_examples if args.total_examples > 0 else args.num_examples
+    max_empty_batches = max(1, args.max_empty_batches)
+
+    synthesize_mode = getattr(args, "synthesize_mode", "sequential")
+    if synthesize_mode == "parallel":
+        all_examples = _run_synthesize_parallel(
+            args, memory, vector_store, on_batch_complete, targets,
+            catalog, llm_config, batch_size, total_examples, max_empty_batches,
+        )
+    else:
+        all_examples = _run_synthesize_sequential(
+            args, memory, vector_store, on_batch_complete, targets,
+            catalog, llm_config, batch_size, total_examples, max_empty_batches,
+        )
 
     # Rebuild manifest from every validated example on disk so accumulated
     # runs are all visible to the verify stage.

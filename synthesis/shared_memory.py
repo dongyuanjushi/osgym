@@ -355,7 +355,7 @@ class VectorDedupStore:
         self,
         persist_path: str,
         embedder: OpenAICompatEmbedder,
-        similarity_threshold: float = 0.88,
+        similarity_threshold: float = 0.7,
     ):
         import chromadb  # local import so the module stays optional
 
@@ -541,7 +541,7 @@ def build_vector_store(
     persist_path: str,
     endpoint: str,
     model: str,
-    similarity_threshold: float = 0.88,
+    similarity_threshold: float = 0.7,
     api_key: Optional[str] = None,
 ) -> Optional[VectorDedupStore]:
     """Build a VectorDedupStore after smoke-testing the embedding endpoint.

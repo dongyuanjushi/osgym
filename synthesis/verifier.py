@@ -809,9 +809,8 @@ def verify_examples(
             getattr(args, "screen_height", 1080),
         )
 
-    # verify_mode = getattr(args, "verify_mode", "run")
-    verify_mode = "debug"
-    if verify_mode == "debug":
+    verification_mode = getattr(args, "verification_mode", "sequential")
+    if verification_mode == "sequential":
         results = _run_verify_sequential(
             args, examples, max_steps=max_steps, screen_size=screen_size,
         )

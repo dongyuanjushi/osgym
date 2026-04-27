@@ -91,12 +91,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-steps", type=int, default=15,
                     help="Max steps for code execution; also guides task complexity during synthesis")
 
-    # Parallelism / verification mode
+    # Parallelism / per-stage execution mode
     p.add_argument("--num-workers", type=int, default=2,
-                    help="Number of parallel worker processes for verification")
-    p.add_argument("--verify-mode", choices=["run", "debug"], default="run",
-                    help="'run' = multi-process workers (production), "
-                         "'debug' = sequential in main process (debugger-friendly)")
+                    help="Number of parallel workers (threads for synthesis, "
+                         "processes for verification) when the corresponding "
+                         "stage runs in parallel mode.")
+    p.add_argument("--synthesize-mode", choices=["sequential", "parallel"], default="sequential",
+                    help="'sequential' = process domains one at a time in the main thread; "
+                         "'parallel' = process up to --num-workers domains concurrently "
+                         "via a thread pool (LLM calls are I/O-bound).")
+    p.add_argument("--verification-mode", choices=["sequential", "parallel"], default="sequential",
+                    help="'sequential' = run examples one at a time in the main process "
+                         "(debugger-friendly); "
+                         "'parallel' = multi-process workers pulling examples from a queue.")
     p.add_argument("--screen-width", type=int, default=1920,
                     help="VM screen width. Used to scale 0..999-grid coordinates "
                          "when the verifier LLM picks gui mode for a task.")
@@ -120,9 +127,9 @@ def build_parser() -> argparse.ArgumentParser:
                          "(the '/v1/embeddings' suffix is appended). Required with --enable-dedup.")
     p.add_argument("--embedding-model", type=str, default="",
                     help="Embedding model name to send to the endpoint. Required with --enable-dedup.")
-    p.add_argument("--dedup-threshold", type=float, default=0.88,
+    p.add_argument("--dedup-threshold", type=float, default=0.7,
                     help="Cosine-similarity threshold above which a new task is treated "
-                         "as a duplicate (0-1). Default 0.88.")
+                         "as a duplicate (0-1). Default 0.7.")
 
     return p
 
