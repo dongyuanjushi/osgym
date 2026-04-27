@@ -7,8 +7,6 @@ from typing import Union, Any, TypeVar, Callable
 from .utils import _match_record
 from .utils import _match_value_to_rule as _match_pref
 
-from ..schema import evaluator
-
 logger = logging.getLogger("desktopenv.metric.thunderbird")
 
 V = TypeVar("Value")
@@ -16,14 +14,6 @@ V = TypeVar("Value")
 _pref_pattern: Pattern[str] = re.compile(r'^user_pref\("(?P<key>(?:[^"]|\\")+)\", (?P<val>.+)\);$');
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "expect?": "optional. dict mapping pref key (str) to a {'method': str, 'ref': any} matcher that must succeed",
-        "unexpect?": "optional. dict mapping pref key (str) to a {'method': str, 'ref': any} matcher that must NOT succeed",
-    },
-    summary="result (str): path to result file",
-)
 def check_thunderbird_prefs(result: str, rule: Dict[str, Dict[str, Dict[str, Any]]]):
     """
     Args:
@@ -83,14 +73,6 @@ _condition_pattern: Pattern[str] = re.compile(
     r'\b(?:AND|OR) \((?:[\w ]+),(?:[\w ' + '\'' + r']+),(?:"(?:(?:[^"]|\")+)"|(?:[^)]+))\)|\bALL\b')
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "expect?": "optional. list of {key: value} filter records; each must match at least one parsed Thunderbird filter",
-        "unexpect?": "optional. list of {key: value} filter records; none may match any parsed Thunderbird filter",
-    },
-    summary="result (str): path to filter def file",
-)
 def check_thunderbird_filter(result: str, rules: Dict[str, List[Dict[str, str]]]) -> float:
     """
     Args:
@@ -153,10 +135,6 @@ def check_thunderbird_filter(result: str, rules: Dict[str, List[Dict[str, str]]]
     return float(all(expect_metrics) and unexpect_metric)
 
 
-@evaluator(
-    role="metric",
-    summary="Check the file or file_list that each text file contains all messages in a folder in Thunderbird. Each message is started with `FROM - `.",
-)
 def check_thunderbird_folder(result: Union[str, List[str]], reference: Union[str, List[str]], **kwargs) -> float:
     """
     Check the file or file_list that each text file contains all messages in a folder in Thunderbird. Each message is started with `FROM - `.

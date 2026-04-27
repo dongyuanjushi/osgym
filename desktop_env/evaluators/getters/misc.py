@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 import pytz
 import requests
 
+from ..schema import evaluator
+
 logger = logging.getLogger("desktopenv.getters.misc")
 
 R = TypeVar("Rule")
@@ -84,12 +86,32 @@ relativeTime_to_IntDay = {
     "next Friday split": "special"
 }
 
+@evaluator(
+    role="getter",
+    config={
+        "rules": "the rule object to forward verbatim to the metric "
+                 "(can be any JSON-serializable value)",
+    },
+    returns="the value bound to config['rules'], passed through unchanged",
+    summary="Pass-through getter that returns the rule object as-is.",
+)
 def get_rule(env, config: Dict[str, R]) -> R:
     """
     Returns the rule as-is.
     """
     return config["rules"]
 
+@evaluator(
+    role="getter",
+    config={
+        "rules": "rule object whose 'expected' values may reference relative-time placeholders",
+        "relativeTime": "dict with 'from' (required) and 'to' (optional) "
+                        "naming relative-time anchors like 'tomorrow' or "
+                        "'next Friday'",
+    },
+    returns="the rule with any relative-time placeholders resolved to absolute dates",
+    summary="Resolve relative-time placeholders in a rule to absolute dates.",
+)
 def get_rule_relativeTime(env, config: Dict[str, R]) -> R:
     """
     According to the rule definded in funciton "apply_rules_to_timeFormat", convert the relative time to absolute time.
@@ -353,11 +375,25 @@ def apply_rules_to_timeFormat(timeFormat: str, absoluteDay: datetime):
     return timeFormat
 
 
+@evaluator(
+    role="getter",
+    returns="str — XML serialization of the GNOME accessibility tree of the focused window",
+    summary="Return the focused-window accessibility tree as XML.",
+)
 def get_accessibility_tree(env, *args) -> str:
     accessibility_tree: str = env.controller.get_accessibility_tree()
     logger.debug("AT@eval: %s", accessibility_tree)
     return accessibility_tree
 
+
+@evaluator(
+    role="getter",
+    config={
+        "diff_range_in_minutes": "tolerance window (in minutes) for time-comparison metrics",
+    },
+    returns="int — value passed through verbatim from config['diff_range_in_minutes']",
+    summary="Return the time tolerance window from the config.",
+)
 def get_time_diff_range(env, config) -> str:
     try:
         return config["diff_range_in_minutes"]
@@ -365,6 +401,10 @@ def get_time_diff_range(env, config) -> str:
         logger.error("diff_range_in_minutes not found in config.")
         return None
 
+@evaluator(
+    role="getter",
+    summary="Get timezone from IP address using IP geolocation API",
+)
 def get_timezone_from_ip() -> str:
     """
     Get timezone from IP address using IP geolocation API
@@ -386,6 +426,13 @@ def get_timezone_from_ip() -> str:
     logger.info("Using UTC as fallback timezone")
     return 'UTC'
 
+@evaluator(
+    role="getter",
+    config={
+        "rules": "dict: rule mapping that may contain a 'timezone' (str) key giving an explicit IANA timezone to use",
+    },
+    summary="Get timezone from config, with fallback options",
+)
 def get_timezone_from_config(config: Dict, default_timezone: str = None) -> str:
     """
     Get timezone from config, with fallback options

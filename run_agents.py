@@ -49,6 +49,20 @@ EXAMPLES_DIR_DEFAULT = os.path.join(
     "examples",
 )
 
+
+def _parse_server_urls(server_url_arg: str) -> List[str]:
+    """Split ``--server-url`` into one or more URLs.
+
+    Accepts either a single URL or a comma-separated list. ``start_workers.sh``
+    fans out one uvicorn process per port in ``config.yaml``, so multiple
+    servers commonly live behind the same host on consecutive ports — the
+    runner round-robins tasks across them.
+    """
+    urls = [u.strip().rstrip("/") for u in server_url_arg.split(",") if u.strip()]
+    if not urls:
+        raise ValueError(f"--server-url is empty: {server_url_arg!r}")
+    return urls
+
 # Worker process registry — populated in run_parallel, consumed by the
 # signal handler so SIGINT / SIGTERM tears the pool down cleanly.
 _processes: List[Process] = []
@@ -150,6 +164,55 @@ def _load_examples(args: argparse.Namespace) -> List[Dict[str, Any]]:
     return examples
 
 
+def _result_path(args: argparse.Namespace, example: Dict[str, Any]) -> str:
+    """Path of the per-task result marker — must match worker()'s layout."""
+    domain = example.get("_domain", "unknown")
+    eid = example.get("id", "unknown")
+    return os.path.join(args.output_dir, domain, "trajectories", eid, "result.txt")
+
+
+def _is_task_completed(args: argparse.Namespace, example: Dict[str, Any]) -> bool:
+    """A task is "done" if its result.txt exists and contains a parseable score.
+
+    An empty file (e.g. a crashed write) is treated as not-done so the task
+    will be re-run.
+    """
+    path = _result_path(args, example)
+    if not os.path.isfile(path):
+        return False
+    try:
+        with open(path) as f:
+            content = f.read().strip()
+        if not content:
+            return False
+        float(content.splitlines()[0])
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _filter_completed_tasks(
+    args: argparse.Namespace,
+    examples: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Drop tasks whose result.txt already has a value, unless --rerun is set."""
+    if getattr(args, "rerun", False):
+        return examples
+    pending: List[Dict[str, Any]] = []
+    skipped = 0
+    for ex in examples:
+        if _is_task_completed(args, ex):
+            skipped += 1
+            continue
+        pending.append(ex)
+    if skipped:
+        logger.info(
+            f"Skipping {skipped} task(s) with existing result.txt "
+            f"(use --rerun to force)"
+        )
+    return pending
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Per-task rollout (HTTP equivalent of run_single_example)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -176,8 +239,14 @@ def run_single_rollout(
     example: Dict[str, Any],
     result_dir: str,
     runtime_logger: logging.Logger,
+    server_url: str,
 ) -> Dict[str, Any]:
-    """Drive one full multi-step rollout against the API server."""
+    """Drive one full multi-step rollout against the API server.
+
+    ``server_url`` is the round-robin-assigned endpoint for this task —
+    every API call in this rollout (reset/step/evaluate/shutdown) goes to
+    the same server so the same VM is reused throughout.
+    """
     proc = current_process().name
     instruction = example.get("instruction", "")
     max_steps = args.max_steps
@@ -185,13 +254,15 @@ def run_single_rollout(
     agent = _build_agent(args, runtime_logger)
     agent.reset(result_dir)
 
-    reset_data = _api_reset(args.server_url, example, timeout=args.reset_timeout)
+    reset_data = _api_reset(server_url, example, timeout=args.reset_timeout)
     vm_id = reset_data["vm_id"]
-    runtime_logger.info(f"[{proc}] reset vm_id={vm_id} task={example.get('id')}")
+    runtime_logger.info(
+        f"[{proc}] reset server={server_url} vm_id={vm_id} task={example.get('id')}"
+    )
 
     # Initial observation. The agent expects obs["screenshot"] as bytes
     # or base64; the qwen35_vl normalizer in mm_agents handles both.
-    obs: Dict[str, Any] = {"screenshot": reset_data["screenshot"]}
+    obs: Dict[str, Any] = {"screenshot": base64.b64decode(reset_data["screenshot"])}
     _save_screenshot(
         reset_data["screenshot"],
         os.path.join(result_dir, "step_0_initial.png"),
@@ -202,6 +273,8 @@ def run_single_rollout(
     step_idx = 0
     trajectory: List[Dict[str, Any]] = []
     error: Optional[str] = None
+    
+    # breakpoint()
 
     try:
         while not done and step_idx < max_steps:
@@ -217,34 +290,11 @@ def run_single_rollout(
             runtime_logger.info(f"[{proc}] step={step_idx + 1} action={action_code!r}")
 
             # Client-side sentinels — main.py's /step doesn't recognize these.
-            if action_code in ("DONE", "FAIL"):
-                trajectory.append({
-                    "step_num": step_idx + 1,
-                    "action_timestamp": ts,
-                    "thought": thought,
-                    "observation": observation,
-                    "action": action_code,
-                    "reward": reward,
-                    "done": True,
-                })
-                done = True
-                break
-            if action_code == "WAIT":
-                time.sleep(args.sleep_after_execution)
-                trajectory.append({
-                    "step_num": step_idx + 1,
-                    "action_timestamp": ts,
-                    "thought": thought,
-                    "observation": observation,
-                    "action": "WAIT",
-                    "reward": reward,
-                    "done": False,
-                })
-                step_idx += 1
-                continue
-
+            
+            # breakpoint()
+            
             try:
-                step_data = _api_step(args.server_url, action_code, vm_id)
+                step_data = _api_step(server_url, action_code, vm_id)
             except Exception as e:
                 runtime_logger.error(f"[{proc}] step failed: {e}")
                 error = f"step: {e}"
@@ -270,19 +320,12 @@ def run_single_rollout(
                 "screenshot_file": os.path.basename(shot_path),
             })
             step_idx += 1
-
-        # Final evaluate (best-effort — server may have already evaluated on
-        # the terminating step and released the VM).
-        if error is None:
-            time.sleep(args.sleep_after_evaluation)
-            try:
-                eval_data = _api_evaluate(args.server_url, vm_id)
-                reward = float(eval_data.get("reward", reward))
-            except Exception as e:
-                runtime_logger.warning(f"[{proc}] evaluate failed: {e}")
+            
+            if done:
+                break
 
     finally:
-        _api_shutdown(args.server_url, vm_id)
+        _api_shutdown(server_url, vm_id)
 
     with open(os.path.join(result_dir, "trajectory.json"), "w") as fp:
         json.dump(trajectory, fp, indent=2)
@@ -320,16 +363,17 @@ def _setup_worker_logger(name: str) -> logging.Logger:
 
 
 def worker(task_queue, args: argparse.Namespace, shared_results: list) -> None:
-    """Pull tasks from the queue and run rollouts until drained."""
+    """Pull (example, server_url) tuples from the queue and run rollouts."""
     proc = current_process().name
     runtime_logger = _setup_worker_logger(proc)
     runtime_logger.info(f"[{proc}] worker started")
 
     while True:
         try:
-            example = task_queue.get(timeout=5)
+            item = task_queue.get(timeout=5)
         except Exception:
             break
+        example, server_url = item
 
         eid = example.get("id", "unknown")
         domain = example.get("_domain", "unknown")
@@ -337,11 +381,13 @@ def worker(task_queue, args: argparse.Namespace, shared_results: list) -> None:
         os.makedirs(result_dir, exist_ok=True)
 
         try:
-            res = run_single_rollout(args, example, result_dir, runtime_logger)
+            res = run_single_rollout(args, example, result_dir, runtime_logger, server_url)
+            res["server_url"] = server_url
             shared_results.append(res)
             runtime_logger.info(
-                f"[{proc}] done {domain}/{eid} score={res.get('score')} "
-                f"steps={res.get('steps')} err={res.get('error')}"
+                f"[{proc}] done {domain}/{eid} server={server_url} "
+                f"score={res.get('score')} steps={res.get('steps')} "
+                f"err={res.get('error')}"
             )
         except KeyboardInterrupt:
             runtime_logger.warning(f"[{proc}] KeyboardInterrupt")
@@ -352,6 +398,7 @@ def worker(task_queue, args: argparse.Namespace, shared_results: list) -> None:
             shared_results.append({
                 "id": eid,
                 "domain": domain,
+                "server_url": server_url,
                 "score": 0.0,
                 "steps": 0,
                 "done": False,
@@ -404,17 +451,25 @@ def run_parallel(
     args: argparse.Namespace,
     examples: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """Multi-process rollout: workers pull from a queue."""
+    """Multi-process rollout: workers pull (example, server_url) from a queue.
+
+    Server URLs are pre-assigned at queue-fill time in round-robin order so
+    distribution is exact regardless of how worker pickups interleave.
+    """
     global _processes
 
     n = max(1, args.num_workers)
-    logger.info(f"Running {len(examples)} task(s) across {n} worker(s)")
+    urls = _parse_server_urls(args.server_url)
+    logger.info(
+        f"Running {len(examples)} task(s) across {n} worker(s) "
+        f"over {len(urls)} server(s): {urls}"
+    )
 
     manager = Manager()
     shared_results = manager.list()
     task_queue = manager.Queue()
-    for ex in examples:
-        task_queue.put(ex)
+    for i, ex in enumerate(examples):
+        task_queue.put((ex, urls[i % len(urls)]))
 
     _processes = []
     for pidx in range(n):
@@ -457,19 +512,29 @@ def run_sequential(
     args: argparse.Namespace,
     examples: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """Sequential rollout in the main process (debugger-friendly)."""
-    logger.info(f"Running {len(examples)} task(s) sequentially")
+    """Sequential rollout in the main process (debugger-friendly).
+
+    Still round-robins URLs across tasks so the same scheduling logic is
+    exercised in debug mode as in --mode run.
+    """
+    urls = _parse_server_urls(args.server_url)
+    logger.info(
+        f"Running {len(examples)} task(s) sequentially over "
+        f"{len(urls)} server(s): {urls}"
+    )
     runtime_logger = _setup_worker_logger("seq")
 
     results: List[Dict[str, Any]] = []
     for i, example in enumerate(examples):
         eid = example.get("id", "unknown")
         domain = example.get("_domain", "unknown")
-        logger.info(f"[{i + 1}/{len(examples)}] {domain}/{eid}")
+        server_url = urls[i % len(urls)]
+        logger.info(f"[{i + 1}/{len(examples)}] {domain}/{eid} -> {server_url}")
         result_dir = os.path.join(args.output_dir, domain, "trajectories", eid)
         os.makedirs(result_dir, exist_ok=True)
         try:
-            res = run_single_rollout(args, example, result_dir, runtime_logger)
+            res = run_single_rollout(args, example, result_dir, runtime_logger, server_url)
+            res["server_url"] = server_url
             results.append(res)
         except KeyboardInterrupt:
             logger.warning("KeyboardInterrupt — stopping rollout")
@@ -478,7 +543,7 @@ def run_sequential(
             logger.error(f"Rollout failed for {eid}: {e}")
             logger.error(traceback.format_exc())
             results.append({
-                "id": eid, "domain": domain,
+                "id": eid, "domain": domain, "server_url": server_url,
                 "score": 0.0, "steps": 0, "done": False, "error": str(e),
             })
     return results
@@ -518,7 +583,10 @@ def parse_args() -> argparse.Namespace:
     )
     # Server
     p.add_argument("--server-url", default="http://localhost:20000",
-                   help="OSGym FastAPI base URL (main.py)")
+                   help=("OSGym FastAPI base URL(s). Comma-separate to fan "
+                         "out across multiple servers (started by "
+                         "start_workers.sh). Tasks are round-robin "
+                         "assigned to URLs at queue-fill time."))
     p.add_argument("--reset-timeout", type=int, default=600,
                    help="Reset timeout in seconds (also passed to /reset)")
 
@@ -531,6 +599,9 @@ def parse_args() -> argparse.Namespace:
                    help="Cap examples per domain (0 = no cap)")
     p.add_argument("--max-tasks", type=int, default=0,
                    help="Global cap on total tasks (0 = no cap)")
+    p.add_argument("--rerun", action="store_true",
+                   help=("Re-run tasks even if result.txt already exists. "
+                         "Default is to skip already-completed tasks."))
 
     # Output
     p.add_argument("--output-dir", default="./agent_runs",
@@ -592,6 +663,11 @@ def main() -> None:
     examples = _load_examples(args)
     if not examples:
         logger.error("No examples to run — check --examples-dir / --domains")
+        return
+
+    examples = _filter_completed_tasks(args, examples)
+    if not examples:
+        logger.info("All loaded tasks already have result.txt — nothing to do")
         return
 
     if args.mode == "debug":

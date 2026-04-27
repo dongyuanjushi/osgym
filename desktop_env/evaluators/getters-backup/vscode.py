@@ -4,19 +4,9 @@ import time
 from .file import get_vm_file
 from .replay import get_replay
 
-from ..schema import evaluator
-
 logger = logging.getLogger("desktopenv.getters.vscode")
 
 
-@evaluator(
-    role="getter",
-    config={
-        "vscode_extension_command": "str: VSCode command palette text to type and execute (e.g. an extension command name)",
-        "path": "str: absolute path on the VM to the config/output file produced by the command",
-        "dest": "str: destination file name under the local cache dir to save the fetched file",
-    },
-)
 def get_vscode_config(env, config: Dict[str, Any]) -> str:
     os_type = env.vm_platform
     vscode_extension_command = config["vscode_extension_command"]

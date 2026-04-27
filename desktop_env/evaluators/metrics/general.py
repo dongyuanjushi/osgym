@@ -21,10 +21,20 @@ from lxml.etree import _Element
 from rapidfuzz import fuzz
 
 from desktop_env.evaluators.metrics.utils import _match_record, _match_value_to_rule
+from desktop_env.evaluators.schema import evaluator
 
 logger = logging.getLogger("desktopenv.metric.general")
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "include?": "list of substrings that must all be present in result",
+        "exclude?": "list of substrings that must all be absent from result",
+    },
+    returns="float — 1.0 when every include is present AND every exclude is absent, else 0.0",
+    summary="Check that result contains all include strings and none of the exclude strings.",
+)
 def check_include_exclude(result: str, rules: Dict[str, List[str]]) -> float:
     if result is None:
         return 0.
@@ -38,6 +48,14 @@ def check_include_exclude(result: str, rules: Dict[str, List[str]]) -> float:
         return 0.
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "expected": "the value that result must equal exactly",
+    },
+    returns="float — 1.0 when result == rules['expected'] else 0.0",
+    summary="Strict equality check: 1.0 iff result == rules['expected'].",
+)
 def exact_match(result, rules) -> float:
     expect = rules["expected"]
     print(result, expect)
@@ -47,6 +65,15 @@ def exact_match(result, rules) -> float:
     else:
         return 0.
 
+
+@evaluator(
+    role="metric",
+    rules={
+        "expected": "list of acceptable values; result is checked for membership",
+    },
+    returns="float — 1.0 when result is one of rules['expected'] else 0.0",
+    summary="Membership check: 1.0 iff result is in rules['expected'].",
+)
 def match_in_list(result, rules) -> float:
     expect = rules["expected"]
     print(result, expect)
@@ -56,6 +83,16 @@ def match_in_list(result, rules) -> float:
     else:
         return 0.
 
+
+@evaluator(
+    role="metric",
+    options={
+        "type?": "'str' (default) or 'list' — comparison shape",
+        "ignore_case?": "if True, compare case-insensitively (default False)",
+    },
+    returns="float — 1.0 when result and expected match per the chosen type, else 0.0",
+    summary="String / list literal equality with optional case folding.",
+)
 def literal_match(result: Any, expected: Any, **options) -> float:
     literal_type = options.get('type', 'str')
     if literal_type == 'str':
@@ -73,6 +110,14 @@ def literal_match(result: Any, expected: Any, **options) -> float:
         raise NotImplementedError(f"Type {type} not supported")
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "expected": "value to look up inside the result container",
+    },
+    returns="float — 1.0 when rules['expected'] in result, else 0.0",
+    summary="Reverse-membership check: 1.0 iff rules['expected'] is in result.",
+)
 def is_in_list(result, rules) -> float:
     expect = rules["expected"]
     if expect in result:
@@ -81,6 +126,11 @@ def is_in_list(result, rules) -> float:
         return 0.
 
 
+@evaluator(
+    role="metric",
+    returns="float — line-level SequenceMatcher ratio between result and expect",
+    summary="Compare two text files line-by-line with difflib.SequenceMatcher.",
+)
 def diff_text_file(result: str, expect: str) -> float:
     if result is None:
         return 0.
@@ -92,12 +142,26 @@ def diff_text_file(result: str, expect: str) -> float:
     return difflib.SequenceMatcher(a=result_lines, b=expected_lines).ratio()
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "expected": "the reference string to fuzzy-compare against",
+    },
+    returns="float — rapidfuzz ratio in [0, 1] (1.0 = identical)",
+    summary="Fuzzy string-similarity score against rules['expected'].",
+)
 def fuzzy_match(result, rules) -> float:
     expect = rules["expected"]
 
     return fuzz.ratio(result, expect) / 100.
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "expected": "list of str: candidate answers fuzzy-matched against each word in the docx",
+    },
+)
 def fuzzy_place_math(result_file_path, rules) -> float:
     if result_file_path is None:
         return 0.
@@ -119,6 +183,14 @@ def fuzzy_place_math(result_file_path, rules) -> float:
     return sum(fuzzy_score_list) / 3
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "expect?": "optional. list of dict[str, str]: each record-matching rule that must be satisfied by some csv row",
+        "unexpect?": "optional. list of dict[str, str]: record-matching rules that must NOT match any csv row",
+    },
+    summary="result (str): path to csv file",
+)
 def check_csv(result: str, rules: Dict[str, List[Dict[str, str]]]) -> float:
     """
     Args:
@@ -148,6 +220,14 @@ def check_csv(result: str, rules: Dict[str, List[Dict[str, str]]]) -> float:
     return float(all(expect_metrics) and unexpect_metric)
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "expect?": "optional. list of str: regex patterns each of which must match at least one line in the file",
+        "unexpect?": "optional. list of str: regex patterns none of which may match any line in the file",
+    },
+    summary="result (str): path to list file",
+)
 def check_list(result: str, rules: Dict[str, List[str]]) -> float:
     """
     Args:
@@ -213,6 +293,10 @@ _accessibility_ns_map = {
 
 }
 
+@evaluator(
+    role="metric",
+    summary="result (str): XML of GNOME Accessibility Tree",
+)
 def check_accessibility_tree(result: str, rules: List[Dict[str, Any]], osname: str = "ubuntu") -> float:
     """
     Args:
@@ -270,12 +354,26 @@ def check_accessibility_tree(result: str, rules: List[Dict[str, Any]], osname: s
 # def check_existence(result: str, *args) -> float:
 # return 1. - (result is None)
 
+@evaluator(
+    role="metric",
+    rules={
+        "sql": "str: SQL query executed against the sqlite db; first column of first row is cast to float and returned",
+    },
+)
 def run_sqlite3(result: str, rules: Dict[str, Any]) -> float:
     connection: sqlite3.Connection = sqlite3.connect(result)
     cursor: sqlite3.Cursor = connection.execute(rules["sql"])
     return float(cursor.fetchone()[0] or 0)
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "expect?": "optional. list of dict with 'key' (list[str] path), 'method' (str), 'ref' (any): all must match",
+        "unexpect?": "optional. list of dict with 'key' (list[str] path), 'method' (str), 'ref' (any): none may match",
+    },
+    summary="result (str): path to json file",
+)
 def check_json(result: str, rules: Dict[str, List[Dict[str, Union[List[str], str]]]], is_yaml: bool = False) -> float:
     """
     Args:
@@ -379,6 +477,14 @@ def check_json(result: str, rules: Dict[str, List[Dict[str, Union[List[str], str
     return float(metric)
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "expected": "dict: reference json object whose keys/values are compared against result; supports 'ignore_list_order' bool flag",
+        "expect_in_result?": "optional bool (default False): if True, expected values may be substrings/members of result values",
+    },
+    summary="One of the most commonly used function to evalute.",
+)
 def check_direct_json_object(result, rules) -> float:
     """
     One of the most commonly used function to evalute.
@@ -480,6 +586,9 @@ def check_direct_json_object(result, rules) -> float:
         return 0.
 
 
+@evaluator(
+    role="metric",
+)
 def compare_time_in_speedtest_results(speedtest_result_path, time_diff):
     if not speedtest_result_path:
         return 0
@@ -505,6 +614,9 @@ def compare_time_in_speedtest_results(speedtest_result_path, time_diff):
         return 0
 
 
+@evaluator(
+    role="metric",
+)
 def is_included_all_json_objects(gold_file_path, result_file_path):
     if not gold_file_path or not result_file_path:
         return 0
@@ -524,6 +636,9 @@ def is_included_all_json_objects(gold_file_path, result_file_path):
     return 1
 
 
+@evaluator(
+    role="metric",
+)
 def is_gold_text_included_in_pdf(pdf_file_path, gold_text_path):
     if not gold_text_path or not pdf_file_path:
         return 0
@@ -551,6 +666,12 @@ def is_gold_text_included_in_pdf(pdf_file_path, gold_text_path):
         return 1
 
 
+@evaluator(
+    role="metric",
+    config={
+        "expected": "list of str: substrings that must all appear in the contents of the target text file",
+    },
+)
 def file_contains(file_path, config):
     # file_path ends with .txt
     if not file_path:
@@ -568,6 +689,9 @@ def file_contains(file_path, config):
     return 1.
 
 
+@evaluator(
+    role="metric",
+)
 def check_line_number(file_path, line_number):
     # check if file_path exists
     if file_path is None or not os.path.isfile(file_path):
@@ -587,6 +711,9 @@ def check_line_number(file_path, line_number):
         return 0.
 
 
+@evaluator(
+    role="metric",
+)
 def compare_terminal_and_txt(txt_file_path, terminal_output):
     if not txt_file_path or not terminal_output:
         return 0
@@ -598,6 +725,9 @@ def compare_terminal_and_txt(txt_file_path, terminal_output):
     return 1 if terminal_output == txt_file_content else 0
 
 
+@evaluator(
+    role="metric",
+)
 def compare_python_pure_text(py_file_path, gold_file_path):
     if not py_file_path or not gold_file_path:
         return 0.0

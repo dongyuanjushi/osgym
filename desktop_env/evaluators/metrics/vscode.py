@@ -5,7 +5,13 @@ import sys
 import re
 from typing import Dict
 
+from ..schema import evaluator
 
+
+@evaluator(
+    role="metric",
+    summary="actual (str): path to result text file",
+)
 def check_json_keybindings(actual: str, expected: str, **options) -> float:
     """
     Args:
@@ -46,6 +52,10 @@ def check_json_keybindings(actual: str, expected: str, **options) -> float:
         return 0.0
 
 
+@evaluator(
+    role="metric",
+    summary="actual (str): path to result text file",
+)
 def check_json_settings(actual: str, expected: str, **options) -> float:
     """
     Args:
@@ -74,6 +84,10 @@ def check_json_settings(actual: str, expected: str, **options) -> float:
     return 1.0
 
 
+@evaluator(
+    role="metric",
+    summary="actual (str): path to result text file",
+)
 def compare_text_file(actual: str, expected: str, **options) -> float:
     """
     Args:
@@ -111,6 +125,9 @@ import zipfile
 from difflib import SequenceMatcher
 import PyPDF2
 
+@evaluator(
+    role="metric",
+)
 def compare_pdf_content(content1, content2, text_similarity_threshold):
     def extract_text_from_pdf(content):
         with open("temp.pdf", "wb") as temp_pdf:
@@ -130,6 +147,10 @@ def compare_pdf_content(content1, content2, text_similarity_threshold):
 
     return similarity_ratio >= text_similarity_threshold
 
+@evaluator(
+    role="metric",
+    summary="actual (str): path to result zip file",
+)
 def compare_zip_files(actual: str, expected: str, **options) -> float:
     """
     Args:
@@ -163,6 +184,12 @@ def compare_zip_files(actual: str, expected: str, **options) -> float:
     return 1.0
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "expected": "str: full expected file contents to match exactly against the file at `actual`",
+    },
+)
 def compare_config(actual: str, rules: Dict, **options) -> float:
     if not actual:
         return 0.
@@ -175,6 +202,13 @@ def compare_config(actual: str, rules: Dict, **options) -> float:
     return 0.0
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "expected": "str: gold answer string compared for exact equality against the actual result string",
+    },
+    summary="actual (str): result string",
+)
 def compare_answer(actual: str, rules: Dict, **options) -> float:
     """
     Args:
@@ -194,6 +228,13 @@ def compare_answer(actual: str, rules: Dict, **options) -> float:
     return 0.0
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "type": "str: one of {'contain', 'not_contain'}; whether the expected extension id should be present in or absent from the installed list",
+        "expected": "str: extension identifier to look for inside the actual installed-extensions string",
+    },
+)
 def is_extension_installed(actual: str, rules: Dict, **options):
     if rules['type'] == 'contain':
         if rules['expected'] in actual:
@@ -207,6 +248,10 @@ def is_extension_installed(actual: str, rules: Dict, **options):
         raise NotImplementedError
 
 
+@evaluator(
+    role="metric",
+    summary="Check the python file by running the test suite in the given test file.",
+)
 def check_python_file_by_test_suite(actual_files, test_file, **options) -> float:
     """Check the python file by running the test suite in the given test file.
     
@@ -355,10 +400,20 @@ def check_python_file_by_test_suite(actual_files, test_file, **options) -> float
         logger.debug("Restored sys.path")
 
 
+@evaluator(
+    role="metric",
+)
 def check_python_file_by_gold_file(actual_files, gold_file: str, **options) -> float:
     pass
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "value": "str: expected background-image URL that must appear inside a `background-image: url('...')` rule in any <style> tag",
+    },
+    summary="Check if the background image is correctly set.",
+)
 def check_html_background_image(src_path: str, rule: Dict = None) -> float:
     """
     Check if the background image is correctly set.
@@ -378,6 +433,10 @@ def check_html_background_image(src_path: str, rule: Dict = None) -> float:
     return 0.0
 
 
+@evaluator(
+    role="metric",
+    summary="Compare whether the content of two files are the same.",
+)
 def compare_result_files(src_path, tgt_path):
     """
     Compare whether the content of two files are the same.

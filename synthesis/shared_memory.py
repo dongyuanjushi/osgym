@@ -73,12 +73,21 @@ class SynthesisMemory:
             self.entries = data.get("entries", [])
             self.stats = data.get("stats", self.stats)
             # Migrate old entries that used "verified" instead of
-            # "executable"/"solvable"
+            # "executable"/"solvable", and the unified "failure_reasons"
+            # field instead of the split execution/verification reasons.
             for e in self.entries:
                 if "executable" not in e and "verified" in e:
                     e["executable"] = e.pop("verified")
                 if "solvable" not in e:
                     e["solvable"] = False
+                if "failure_reasons" in e:
+                    legacy = e.pop("failure_reasons") or []
+                    if not e.get("executable"):
+                        e.setdefault("execution_failure_reasons", []).extend(legacy)
+                    elif e.get("solvable") is False:
+                        e.setdefault("verification_failure_reasons", []).extend(legacy)
+                e.setdefault("execution_failure_reasons", [])
+                e.setdefault("verification_failure_reasons", [])
             logger.info(f"Loaded synthesis memory: {len(self.entries)} entries from {self.path}")
         else:
             logger.info(f"No existing synthesis memory at {self.path} – starting fresh")
@@ -106,24 +115,45 @@ class SynthesisMemory:
         solvable: bool = None,
     ) -> None:
         code_score = code_result.get("score", 0.0) if code_result else None
+        error = (code_result or {}).get("error")
 
-        # Build concise failure reasons
-        failure_reasons = []
+        # Build detailed, actionable failure reasons. ``error`` carries the
+        # specific diagnosis (e.g. static-validation message, dedup match,
+        # or a raised exception from /step). Surfacing it here turns the
+        # generic "scripts not executable" line into something the next
+        # synthesis round and a human reviewer can both act on.
+        execution_failure_reasons: List[str] = []
+        verification_failure_reasons: List[str] = []
         if not executable:
-            failure_reasons.append("The scripts for either setup or evaluator are not executable")
-        if solvable is not None and not solvable:
-            failure_reasons.append("The generated task can not be solved by code execution verification")
+            if error:
+                execution_failure_reasons.append(
+                    f"Synthesized example failed pre-VM static validation: {error}"
+                )
+            else:
+                execution_failure_reasons.append(
+                    "Synthesized scripts (setup/evaluator) failed static "
+                    "validation before the VM was touched"
+                )
+        else:
+            if error:
+                verification_failure_reasons.append(
+                    f"Verification raised an error while running on the VM: {error}"
+                )
+            elif solvable is False:
+                verification_failure_reasons.append(
+                    "Verification ran without errors but the resulting state "
+                    f"did not satisfy the verifier (score={code_score})"
+                )
 
         entry = {
             "id": example.get("id", ""),
             "domain": domain,
             "instruction": example.get("instruction", ""),
             "evaluator_eval": example.get("evaluator", {}).get("eval", ""),
-            "code_score": code_score,
-            "code_steps": code_result.get("steps") if code_result else None,
             "executable": executable,
+            "execution_failure_reasons": execution_failure_reasons,
             "solvable": solvable,
-            "failure_reasons": failure_reasons
+            "verification_failure_reasons": verification_failure_reasons
         }
 
         # Upsert: update existing entry for the same id, or append new one.
@@ -166,24 +196,23 @@ class SynthesisMemory:
         if solvable:
             lines.append("### Previously SOLVABLE tasks (do NOT generate similar ones):")
             for e in solvable[-max_entries:]:
-                lines.append(
-                    f"  - \"{e['instruction']}\"  "
-                    f"[code_score={e.get('code_score')}]"
-                )
+                lines.append(f"  - \"{e['instruction']}\"")
             lines.append("")
 
         # --- Executable but not solvable: valid scripts, agent failed ---
         if executable_only:
             lines.append(
                 "### Previously EXECUTABLE but NOT SOLVABLE tasks "
-                "(valid scripts, agent execution failed):"
+                "(valid scripts, agent/verifier execution did not satisfy the metric):"
             )
             for e in executable_only[-max_entries:]:
-                reasons = "; ".join(e.get("failure_reasons", ["unknown"]))
+                reasons = "; ".join(
+                    e.get("verification_failure_reasons") or ["unknown"]
+                )
                 lines.append(
                     f"  - \"{e['instruction']}\"\n"
                     f"    evaluator: {e.get('evaluator_eval', 'n/a')[:100]}\n"
-                    f"    failure: {reasons}"
+                    f"    verification_failure: {reasons}"
                 )
             lines.append("")
 
@@ -194,11 +223,13 @@ class SynthesisMemory:
                 "(invalid scripts — learn from these):"
             )
             for e in not_executable[-max_entries:]:
-                reasons = "; ".join(e.get("failure_reasons", ["unknown"]))
+                reasons = "; ".join(
+                    e.get("execution_failure_reasons") or ["unknown"]
+                )
                 lines.append(
                     f"  - \"{e['instruction']}\"\n"
                     f"    evaluator: {e.get('evaluator_eval', 'n/a')[:100]}\n"
-                    f"    failure: {reasons}"
+                    f"    execution_failure: {reasons}"
                 )
             lines.append("")
 
@@ -207,10 +238,16 @@ class SynthesisMemory:
         if failed_entries:
             failure_keywords: Dict[str, int] = {}
             for e in failed_entries:
-                for r in e.get("failure_reasons", []):
+                reasons = (
+                    (e.get("execution_failure_reasons") or [])
+                    + (e.get("verification_failure_reasons") or [])
+                )
+                for r in reasons:
                     if "error=" in r:
                         err = r.split("error=")[-1][:60]
-                        failure_keywords[err] = failure_keywords.get(err, 0) + 1
+                    else:
+                        err = r[:60]
+                    failure_keywords[err] = failure_keywords.get(err, 0) + 1
             if failure_keywords:
                 lines.append("### Common failure patterns (avoid these):")
                 for kw, cnt in sorted(failure_keywords.items(), key=lambda x: -x[1])[:10]:

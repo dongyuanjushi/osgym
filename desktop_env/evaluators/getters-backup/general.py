@@ -2,20 +2,9 @@ import logging
 from typing import Dict
 import requests
 
-from ..schema import evaluator
-
 logger = logging.getLogger("desktopenv.getters.general")
 
 
-@evaluator(
-    role="getter",
-    config={
-        "command": "shell command line to execute on the VM",
-        "shell?": "if True, run the command through a shell (default False)",
-    },
-    returns="str | None — the command's stdout, or None if the VM service errors",
-    summary="Run a command on the VM and return its stdout.",
-)
 def get_vm_command_line(env, config: Dict[str, str]):
     vm_ip = env.vm_ip
     port = env.server_port
@@ -32,16 +21,6 @@ def get_vm_command_line(env, config: Dict[str, str]):
         logger.error("Failed to get vm command line. Status code: %d", response.status_code)
         return None
 
-
-@evaluator(
-    role="getter",
-    config={
-        "command": "shell command line to execute on the VM",
-        "shell?": "if True, run the command through a shell (default False)",
-    },
-    returns="str | None — the command's stderr, or None if the VM service errors",
-    summary="Run a command on the VM and return its stderr.",
-)
 def get_vm_command_error(env, config: Dict[str, str]):
     vm_ip = env.vm_ip
     port = env.server_port
@@ -59,10 +38,5 @@ def get_vm_command_error(env, config: Dict[str, str]):
         return None
 
 
-@evaluator(
-    role="getter",
-    returns="str — the most recent terminal output captured by the VM controller",
-    summary="Return the VM's recent terminal output.",
-)
 def get_vm_terminal_output(env, config: Dict[str, str]):
     return env.controller.get_terminal_output()

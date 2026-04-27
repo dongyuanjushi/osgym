@@ -1,16 +1,9 @@
 import os
-import logging
 from typing import List, Union
 from skimage.metrics import structural_similarity as ssim
 from PIL import Image, ImageChops, ImageStat
 
-from ..schema import evaluator
 
-
-@evaluator(
-    role="metric",
-    summary="Compare two image lists, only if all images are the same, return 1.0, otherwise return 0.0",
-)
 def compare_image_list(pred_img_path_list: Union[str, List[str]],
                        gold_img_path_list: Union[str, List[str]]) -> float:
     """ Compare two image lists, only if all images are the same, return 1.0, otherwise return 0.0
@@ -23,25 +16,12 @@ def compare_image_list(pred_img_path_list: Union[str, List[str]],
             return 0.0
         pred_img = Image.open(pred_img_path)
         gold_img = Image.open(gold_img_path)
-        
-        # Check if images have different sizes and resize if necessary
-        if pred_img.size != gold_img.size:
-            logging.debug(f"Images have different sizes: {pred_img.size} vs {gold_img.size}, resizing predicted image to match gold image")
-            pred_img = pred_img.resize(gold_img.size, Image.Resampling.LANCZOS)
-        
-        # Ensure both images are in the same mode for comparison
-        if pred_img.mode != gold_img.mode:
-            pred_img = pred_img.convert(gold_img.mode)
-        
         diff = ImageChops.difference(pred_img, gold_img)
         if diff.getbbox():
             return 0.0
     return 1.0
 
 
-@evaluator(
-    role="metric",
-)
 def get_gimp_export_path():
     # Path to GIMP's configuration file. This example assumes GIMP version 2.10.
     # You need to adjust the path according to the GIMP version and user's file system.
@@ -59,21 +39,15 @@ def get_gimp_export_path():
                     return current_path
     except FileNotFoundError:
         # Handle the case where the configuration file is not found
-        logging.debug("GIMP configuration file not found")
+        print("GIMP configuration file not found")
         return False
 
 
-@evaluator(
-    role="metric",
-)
 def check_file_exists(directory, filename):
     file_path = os.path.join(directory, filename)
     return 1 if os.path.isfile(file_path) else 0
 
 
-@evaluator(
-    role="metric",
-)
 def increase_saturation(image1_path: str, image2_path: str) -> float:
     def calculate_saturation(image):
         # convert the image to HSV mode
@@ -97,9 +71,6 @@ def increase_saturation(image1_path: str, image2_path: str) -> float:
     return 1 if saturation1 < saturation2 else 0
 
 
-@evaluator(
-    role="metric",
-)
 def decrease_brightness(image1_path: str, image2_path: str) -> float:
     def calculate_brightness(image):
         # Convert the image to grayscale mode
@@ -124,9 +95,6 @@ import cv2
 import numpy as np
 
 
-@evaluator(
-    role="metric",
-)
 def find_yellow_triangle(image):
     # Convert the image to RGBA
     rgba = cv2.cvtColor(image, cv2.COLOR_BGR2RGBA)
@@ -155,9 +123,6 @@ def find_yellow_triangle(image):
     return cx, cy
 
 
-@evaluator(
-    role="metric",
-)
 def compare_triangle_positions(image1, image2):
     image1 = cv2.imread(image1, cv2.IMREAD_COLOR)
     image2 = cv2.imread(image2, cv2.IMREAD_COLOR)
@@ -175,10 +140,6 @@ def compare_triangle_positions(image1, image2):
 
 
 # Functions for the GIMP evaluator
-@evaluator(
-    role="metric",
-    summary="Calculate the average brightness of an image",
-)
 def calculate_brightness(image):
     """Calculate the average brightness of an image"""
     grayscale = image.convert('L')
@@ -186,10 +147,6 @@ def calculate_brightness(image):
     return stat.mean[0]
 
 
-@evaluator(
-    role="metric",
-    summary="Normalize the brightness of an image to a target brightness in [0, 1]",
-)
 def normalize_brightness(image, target_brightness):
     """Normalize the brightness of an image to a target brightness in [0, 1]"""
     current_brightness = calculate_brightness(image)
@@ -202,10 +159,6 @@ def normalize_brightness(image, target_brightness):
     return image.point(point_transform)
 
 
-@evaluator(
-    role="metric",
-    summary="Measure the average saturation of an image",
-)
 def measure_saturation(hsv_image):
     """Measure the average saturation of an image"""
     # Split into H, S, V channels
@@ -217,10 +170,6 @@ def measure_saturation(hsv_image):
     return avg_saturation
 
 
-@evaluator(
-    role="metric",
-    summary="Calculate the contrast of an image as the standard deviation of the pixel",
-)
 def calculate_contrast(image):
     """Calculate the contrast of an image as the standard deviation of the pixel
     values."""
@@ -228,9 +177,6 @@ def calculate_contrast(image):
     return np.std(pixels)
 
 
-@evaluator(
-    role="metric",
-)
 def calculate_image_sharpness(image_path):
     # Load the image in grayscale
     image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
@@ -241,105 +187,24 @@ def calculate_image_sharpness(image_path):
     return variance
 
 
-@evaluator(
-    role="metric",
-    summary="Check if two images are approximately the same by MSE",
-)
 def structure_check_by_mse(img1, img2, threshold=0.03):
     """Check if two images are approximately the same by MSE"""
-    
-    # Ensure both images are PIL Image objects
-    if not hasattr(img1, 'size') or not hasattr(img2, 'size'):
-        # Convert numpy arrays to PIL Images if needed
-        if hasattr(img1, 'shape'):
-            img1 = Image.fromarray(img1)
-        if hasattr(img2, 'shape'):
-            img2 = Image.fromarray(img2)
-    
-    # Check if images have different sizes and resize if necessary
-    if img1.size != img2.size:
-        logging.debug(f"Images have different sizes: {img1.size} vs {img2.size}, resizing first image to match second")
-        img1 = img1.resize(img2.size, Image.Resampling.LANCZOS)
-    
-    # Ensure both images are in RGB mode for consistent comparison
-    if img1.mode != 'RGB':
-        img1 = img1.convert('RGB')
-    if img2.mode != 'RGB':
-        img2 = img2.convert('RGB')
-    
-    # Now calculate MSE with properly sized images
     mse = np.mean(
         (np.array(img1, dtype=np.float32) / 255
          - np.array(img2, dtype=np.float32) / 255) ** 2)
     structure_same = True if mse < threshold else False
-    logging.debug(f"MSE: {mse}, threshold: {threshold}")
+    print("MSE: ", mse)
     return structure_same
 
 
-@evaluator(
-    role="metric",
-    summary="Check if two images are approximately the same by SSIM",
-)
 def structure_check_by_ssim(img1, img2, threshold=0.9):
     """Check if two images are approximately the same by SSIM"""
-    min_size = 7
-    if img1.width < min_size or img1.height < min_size or \
-       img2.width < min_size or img2.height < min_size:
-        logging.warning(f"image too small for ssim: {img1.size} vs {img2.size}")
-        return False
-    
-    if img1.mode != 'RGB':
-        img1 = img1.convert('RGB')
-    if img2.mode != 'RGB':
-        img2 = img2.convert('RGB')
-    
-    # Now both images are in RGB mode, so they should have the same number of channels (3)
-    # But we still need to check the size (though the caller should have checked)
-    if img1.size != img2.size:
-        # If the sizes are different, we cannot compare, return False
-        logging.debug(f"Images have different sizes: {img1.size} vs {img2.size}")
-        return False
-
-    array1 = np.array(img1)
-    array2 = np.array(img2)
-    # They should have the same shape now, but double check
-    if array1.shape != array2.shape:
-        logging.debug(f"Images have different shapes after conversion: {array1.shape} vs {array2.shape}")
-        return False
-
-    # Determine the window size for SSIM
-    min_dim = min(array1.shape[0], array1.shape[1])
-    if min_dim < 7:
-        # If the smallest dimension is less than 7, set win_size to the next smaller odd number
-        win_size = min_dim if min_dim % 2 == 1 else min_dim - 1
-        if win_size < 1:
-            logging.debug("Image too small for SSIM computation (min dimension < 1)")
-            return False
-    else:
-        win_size = 7  # default
-
-    try:
-        # For newer versions of skimage, we use channel_axis, for older versions, multichannel
-        # We try to use the newer way first, then fall back to the old way
-        try:
-            # Newer versions (channel_axis is available)
-            similarity = ssim(array1, array2, win_size=win_size, channel_axis=2)
-        except TypeError:
-            # Older versions use multichannel
-            similarity = ssim(array1, array2, win_size=win_size, multichannel=True)
-    except Exception as e:
-        logging.error(f"SSIM computation failed: {e}")
-        return False
-
-    logging.debug("SSIM: %s", similarity)
+    similarity = ssim(np.array(img1), np.array(img2), multichannel=True, channel_axis=-1)
+    print("SSIM: ", similarity)
     return similarity >= threshold
 
 
-@evaluator(
-    role="metric",
-    summary="Check the brightness of src is lower than tgt and the structures are similar",
-)
-def check_brightness_decrease_and_structure_sim(src_path, tgt_path, threshold=0.03):
+def check_brightness_decrease_and_structure_sim(src_path, tgt_path):
     """
     Check the brightness of src is lower than tgt and the structures are similar
     gimp:7a4deb26-d57d-4ea9-9a73-630f66a7b568
@@ -354,25 +219,19 @@ def check_brightness_decrease_and_structure_sim(src_path, tgt_path, threshold=0.
     brightness_src = calculate_brightness(img_src)
     brightness_tgt = calculate_brightness(img_tgt)
     brightness_reduced = brightness_tgt > brightness_src
-    
-    # print(f"Brightness src: {brightness_src}, tgt: {brightness_tgt}, reduced: {brightness_reduced}")
 
     # Normalize and compare images
     target_brightness = 128
     img_src_normalized = normalize_brightness(img_src, target_brightness)
     img_tgt_normalized = normalize_brightness(img_tgt, target_brightness)
 
-    structure_same = structure_check_by_mse(img_src_normalized, img_tgt_normalized, threshold=threshold)
+    structure_same = structure_check_by_mse(img_src_normalized, img_tgt_normalized)
     if brightness_reduced and structure_same:
         return 1.
     else:
         return 0.
 
 
-@evaluator(
-    role="metric",
-    summary="Check the saturation of src is higher than tgt and the structures are similar",
-)
 def check_saturation_increase_and_structure_sim(src_path, tgt_path):
     """
     Check the saturation of src is higher than tgt and the structures are similar
@@ -408,10 +267,6 @@ def check_saturation_increase_and_structure_sim(src_path, tgt_path):
         return 0.
 
 
-@evaluator(
-    role="metric",
-    summary="Check if the image has been exported to the desktop",
-)
 def check_file_exists_and_structure_sim(src_path, tgt_path):
     """
     Check if the image has been exported to the desktop
@@ -436,10 +291,6 @@ def check_file_exists_and_structure_sim(src_path, tgt_path):
         return 0.
 
 
-@evaluator(
-    role="metric",
-    summary="Check if the triangle is in the middle of the image.",
-)
 def check_triangle_position(tgt_path):
     """
     Check if the triangle is in the middle of the image.
@@ -483,10 +334,6 @@ def check_triangle_position(tgt_path):
         return 0.
 
 
-@evaluator(
-    role="metric",
-    summary="Check if the structure of the two images are similar",
-)
 def check_structure_sim(src_path, tgt_path):
     """
     Check if the structure of the two images are similar
@@ -495,26 +342,15 @@ def check_structure_sim(src_path, tgt_path):
     if src_path is None or tgt_path is None:
         return 0.
 
-    try:
-        img_src = Image.open(src_path)
-        img_tgt = Image.open(tgt_path)
-
-        if img_src.size != img_tgt.size:
-            logging.debug(f"size different: src_path: {src_path}, tgt_path: {tgt_path}")
-            return 0.0
-            
-        structure_same = structure_check_by_ssim(img_src, img_tgt)
-        return 1.0 if structure_same else 0.0
-        
-    except Exception as e:
-        logging.error(f"check_structure_sim error: {str(e)}")
-        return 0.0
+    img_src = Image.open(src_path)
+    img_tgt = Image.open(tgt_path)
+    structure_same = structure_check_by_ssim(img_src, img_tgt)
+    if structure_same:
+        return 1.
+    else:
+        return 0.
 
 
-@evaluator(
-    role="metric",
-    summary="Check if the structure of the two images are similar after resizing.",
-)
 def check_structure_sim_resized(src_path, tgt_path):
     """
     Check if the structure of the two images are similar after resizing.
@@ -526,47 +362,14 @@ def check_structure_sim_resized(src_path, tgt_path):
     img_src = Image.open(src_path)
     img_tgt = Image.open(tgt_path)
 
-    # Check if source image has transparency and extract content area
-    if img_src.mode in ('RGBA', 'LA') or 'transparency' in img_src.info:
-        if img_src.mode != 'RGBA':
-            img_src = img_src.convert('RGBA')
-        
-        # Get alpha channel and find bounding box of non-transparent pixels
-        alpha = img_src.split()[-1]
-        bbox = alpha.getbbox()
-        
-        if bbox is None:
-            # Image is completely transparent
-            logging.debug("Source image is completely transparent")
-            return 0.
-        
-        # Crop to content area only
-        img_src_content = img_src.crop(bbox)
-        logging.debug(f"Source image cropped from {img_src.size} to {img_src_content.size}")
-        
-        # Convert to RGB for comparison
-        img_src_content = img_src_content.convert('RGB')
-        img_src_resized = img_src_content.resize(img_tgt.size)
-    else:
-        # No transparency, resize normally
-        img_src_resized = img_src.resize(img_tgt.size)
-    
-    # Ensure target image is RGB for comparison
-    if img_tgt.mode != 'RGB':
-        img_tgt = img_tgt.convert('RGB')
+    # Resize the images to the same size
+    img_src = img_src.resize(img_tgt.size)
 
     # Check if the structure is similar
-    structure_same = structure_check_by_ssim(img_src_resized, img_tgt)
-    if structure_same:
-        return 1.
-    else:
-        return 0.
+    structure_same = structure_check_by_ssim(img_src, img_tgt)
+    return structure_same
 
 
-@evaluator(
-    role="metric",
-    summary="Check if the src image has higher contrast than the tgt image and the structures are similar",
-)
 def check_contrast_increase_and_structure_sim(src_path, tgt_path):
     """
     Check if the src image has higher contrast than the tgt image and the structures are similar
@@ -593,14 +396,6 @@ def check_contrast_increase_and_structure_sim(src_path, tgt_path):
         return 0.
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "key": "str or list[str]: GIMP config setting name; if a 2-element list, both tokens must match the leading items of the config line",
-        "value": "str: expected value of the matched config line (compared against its last whitespace-separated token)",
-    },
-    summary="Check if the GIMP status is as expected",
-)
 def check_config_status(actual_config_path, rule):
     """
     Check if the GIMP status is as expected
@@ -626,15 +421,6 @@ def check_config_status(actual_config_path, rule):
     return 0.
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "height": "int: expected image height in pixels; if omitted, height is not checked",
-        "width": "int: expected image width in pixels; if omitted, width is not checked",
-        "ignore_transparent?": "optional. bool: if True, measure the bounding box of non-transparent pixels instead of full canvas (default False)",
-    },
-    summary="Check if the size of the src image is correct",
-)
 def check_image_size(src_path, rule):
     """
     Check if the size of the src image is correct
@@ -645,181 +431,45 @@ def check_image_size(src_path, rule):
 
     # Load the image
     img = Image.open(src_path)
-    
-    # Check if we should ignore transparent parts
-    ignore_transparent = rule.get("ignore_transparent", False)
-    
-    if ignore_transparent and img.mode in ('RGBA', 'LA') or 'transparency' in img.info:
-        # Calculate bounding box of non-transparent pixels
-        if img.mode != 'RGBA':
-            img = img.convert('RGBA')
-        
-        # Get alpha channel
-        alpha = img.split()[-1]
-        
-        # Find bounding box of non-transparent pixels
-        bbox = alpha.getbbox()
-        
-        if bbox is None:
-            # Image is completely transparent
-            actual_width = 0
-            actual_height = 0
-        else:
-            # Calculate actual content size
-            actual_width = bbox[2] - bbox[0]
-            actual_height = bbox[3] - bbox[1]
-        
-        logging.debug(f"Original size: {img.size}, Content size: {actual_width}x{actual_height}")
-    else:
-        # Use original image size
-        actual_width = img.size[0]
-        actual_height = img.size[1]
-        logging.debug(f"Image size: {img.size}")
 
     # Check the size
     if rule.get("height", None) is not None:
-        height_same = actual_height == rule["height"]
+        height_same = img.size[1] == rule["height"]
     else:
         height_same = True
     if rule.get("width", None) is not None:
-        width_same = actual_width == rule["width"]
+        width_same = img.size[0] == rule["width"]
     else:
         width_same = True
 
     if height_same and width_same:
-        logging.debug(f"height_same: {height_same}, width_same: {width_same}")
         return 1.
     else:
-        logging.debug(f"height_same: {height_same}, width_same: {width_same}")
         return 0.
 
 
-@evaluator(
-    role="metric",
-    summary="Safely open an image file with retry mechanism for handling truncated files",
-)
-def safe_open_image_with_retry(file_path, max_retries=3, retry_delay=0.5):
-    """
-    Safely open an image file with retry mechanism for handling truncated files
-    """
-    import os
-    import time
-    import logging
-    
-    logger = logging.getLogger(__name__)
-    
-    if not file_path or not os.path.exists(file_path):
-        logger.error(f"File does not exist: {file_path}")
-        return None
-    
-    for attempt in range(max_retries):
-        try:
-            # Check file size first
-            file_size = os.path.getsize(file_path)
-            if file_size == 0:
-                logger.warning(f"File is empty: {file_path}")
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-                    continue
-                return None
-            
-            logger.info(f"Opening image: {file_path} (size: {file_size} bytes, attempt: {attempt + 1})")
-            
-            # Try to open with PIL
-            image = Image.open(file_path)
-            
-            # Verify image can be loaded (trigger actual parsing)
-            image.load()
-            
-            logger.info(f"Successfully opened image: {image.format} {image.mode} {image.size}")
-            return image
-            
-        except (OSError, IOError) as e:
-            if "truncated" in str(e).lower() or "cannot identify" in str(e).lower():
-                logger.warning(f"Attempt {attempt + 1}: Image file appears truncated or corrupted: {e}")
-                if attempt < max_retries - 1:
-                    logger.info(f"Retrying in {retry_delay} seconds...")
-                    time.sleep(retry_delay)
-                    continue
-            else:
-                logger.error(f"IO error opening image: {e}")
-                break
-        except Exception as e:
-            logger.error(f"Unexpected error opening image: {e}")
-            break
-    
-    logger.error(f"Failed to open image after {max_retries} attempts: {file_path}")
-    return None
-
-@evaluator(
-    role="metric",
-    summary="Check if the src image is palette-based and the structure of the two images are similar",
-)
 def check_palette_and_structure_sim(src_path, tgt_path):
     """
     Check if the src image is palette-based and the structure of the two images are similar
-    Enhanced with robust error handling for file format issues and truncated files
     gimp:06ca5602-62ca-47f6-ad4f-da151cde54cc
     """
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    logger.info(f"Evaluating palette and structure similarity: src={src_path}, tgt={tgt_path}")
-    
     if src_path is None or tgt_path is None:
-        logger.warning("Source or target path is None")
         return 0.
 
-    # Safely open source image with retry mechanism
-    source_image = safe_open_image_with_retry(src_path)
-    if source_image is None:
-        logger.error("Failed to open source image")
+    # Check if the source image is palette-based
+    source_image = Image.open(src_path)
+    palette_based = source_image.mode == 'P'
+
+    # Check structure
+    target_image = Image.open(tgt_path)
+    source_image = source_image.convert('RGB')
+    structure_same = structure_check_by_ssim(source_image, target_image)
+    if palette_based and structure_same:
+        return 1.
+    else:
         return 0.
 
-    try:
-        # Check if the source image is palette-based
-        palette_based = source_image.mode == 'P'
-        logger.info(f"Source image mode: {source_image.mode}, palette-based: {palette_based}")
 
-        # Safely open target image
-        target_image = safe_open_image_with_retry(tgt_path)
-        if target_image is None:
-            logger.error("Failed to open target image")
-            source_image.close()
-            return 0.
-
-        try:
-            # Convert source image to RGB for comparison
-            source_rgb = source_image.convert('RGB')
-            logger.info(f"Source converted to RGB: {source_rgb.mode} {source_rgb.size}")
-            
-            # Check structure
-            structure_same = structure_check_by_ssim(source_rgb, target_image)
-            logger.info(f"Structure similarity check: {structure_same}")
-            
-            # Evaluation logic
-            if palette_based and structure_same:
-                result = 1.0
-            else:
-                result = 0.0
-                
-            logger.info(f"Evaluation result: {result} (palette_based={palette_based}, structure_same={structure_same})")
-            return result
-            
-        finally:
-            target_image.close()
-            
-    except Exception as e:
-        logger.error(f"Error during evaluation: {e}")
-        return 0.
-    finally:
-        source_image.close()
-
-
-@evaluator(
-    role="metric",
-    summary="Check if the textbox is on the left side of the image.",
-)
 def check_textbox_on_leftside(src_path):
     """
     Check if the textbox is on the left side of the image.
@@ -848,10 +498,6 @@ def check_textbox_on_leftside(src_path):
         return 0.
 
 
-@evaluator(
-    role="metric",
-    summary="Check if the image is mirrored",
-)
 def check_image_mirror(src_path, tgt_path):
     """
     Check if the image is mirrored
@@ -874,10 +520,6 @@ def check_image_mirror(src_path, tgt_path):
         return 0.
 
 
-@evaluator(
-    role="metric",
-    summary="Check if the background of the source image is green.",
-)
 def check_green_background(src_path, tgt_path):
     """
     Check if the background of the source image is green.
@@ -906,10 +548,6 @@ def check_green_background(src_path, tgt_path):
     return 1.
 
 
-@evaluator(
-    role="metric",
-    summary="Check if the source image is sharper than the target image.",
-)
 def check_sharper(src_path, tgt_path):
     """
     Check if the source image is sharper than the target image.
@@ -920,13 +558,6 @@ def check_sharper(src_path, tgt_path):
     return 1.0 if sharpness_src > sharpness_tgt else 0.0
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "max_size": "int: maximum allowed file size in bytes; the image passes if its size is strictly less than this",
-    },
-    summary="Check if the size of the src image within 500KB",
-)
 def check_image_file_size(src_path, rule):
     """
     Check if the size of the src image within 500KB

@@ -1,15 +1,7 @@
 import csv
 
-from ..schema import evaluator
-
 
 # I want to write a function, reads a csv file, and get all the contents in the third column in the order of rows
-@evaluator(
-    role="getter",
-    config={
-        "csv_path": "str: local filesystem path to the csv file to read",
-    },
-)
 def get_conference_city_in_order(env, config):
     # read the csv file
     csv_path = config['csv_path']

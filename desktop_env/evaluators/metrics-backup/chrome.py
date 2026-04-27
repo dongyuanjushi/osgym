@@ -2,12 +2,8 @@ import logging
 import os
 import re
 import shutil
-import io
-import time
 from itertools import product
 from typing import Any, Dict, List, Union
-
-from ..schema import evaluator
 
 import rapidfuzz.fuzz as fuzz
 from bs4 import BeautifulSoup, Tag
@@ -17,14 +13,6 @@ from desktop_env.evaluators.metrics.utils import are_lists_equal, compare_urls
 logger = logging.getLogger("desktopenv.metrics.chrome")
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "type": "str: one of {'url'}; matching mode for the active tab",
-        "url": "str: expected URL of the active tab compared via compare_urls",
-    },
-    summary="Checks if the expected active tab is open in Chrome.",
-)
 def is_expected_active_tab(active_tab_info: Dict[str, str], rule: Dict[str, Any]) -> float:
     """
     Checks if the expected active tab is open in Chrome.
@@ -40,58 +28,15 @@ def is_expected_active_tab(active_tab_info: Dict[str, str], rule: Dict[str, Any]
             actual_url = active_tab_info.get('url', None)
         else:
             actual_url = active_tab_info
-        logger.info("expected_url: {}".format(expected_url))
-        logger.info("actual_url: {}".format(actual_url))
+        print("expected_url: {}".format(expected_url))
+        print("actual_url: {}".format(actual_url))
         return 1 if compare_urls(expected_url, actual_url) else 0
     else:
         logger.error(f"Unknown type: {match_type}")
         return 0
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "type": "str: one of {'url'}; matching mode for the active tab",
-        "url": "str: expected URL of the active tab compared after stripping query parameters",
-    },
-    summary="Checks if the expected active tab is open in Chrome, ignoring query parameters in the URL.",
-)
-def is_expected_active_tab_approximate(active_tab_info: Dict[str, str], rule: Dict[str, Any]) -> float:
-    """
-    Checks if the expected active tab is open in Chrome, ignoring query parameters in the URL.
-    """
-    if not active_tab_info:
-        return 0.
-
-    match_type = rule['type']
-
-    if match_type == "url":
-        expected_url = rule['url']
-        if isinstance(active_tab_info, Dict):
-            actual_url = active_tab_info.get('url', None)
-        else:
-            actual_url = active_tab_info
-        from urllib.parse import urlparse, urlunparse
-        def strip_query(url):
-            parsed = urlparse(url)
-            return urlunparse(parsed._replace(query=""))
-        if strip_query(expected_url) == strip_query(actual_url):
-            return 1
-        else:
-            return 0
-    else:
-        logger.error(f"Unknown type: {match_type}")
-        return 0
-
-
 # rules[expected] is a string-formatted regex
-@evaluator(
-    role="metric",
-    rules={
-        "expected": "list[str]: regex patterns that all must match (re.search) against the active tab URL",
-    },
-    summary="This function is used to search the expected pattern in the url using regex.",
-)
 def is_expected_url_pattern_match(result, rules) -> float:
     """
     This function is used to search the expected pattern in the url using regex.
@@ -100,39 +45,25 @@ def is_expected_url_pattern_match(result, rules) -> float:
     if not result:
         return 0.
 
-    # Extract URL from result parameter - result can be either a string URL or a dict with 'url' field
-    if isinstance(result, str):
-        result_url = result
-        logger.info("result url: {}".format(result_url))
-    elif isinstance(result, dict) and 'url' in result:
-        result_url = result['url']
-        logger.info("result url: {}".format(result_url))
+    if type(result) == dict:
+        result_url = result["url"]
+        print("result url: {}".format(result_url))
     else:
-        logger.error(f"Invalid result format: {type(result)}, expected string URL or dict with 'url' field")
-        return 0.
-
-    logger.info(f"Result URL to match: {result_url}")
-    
+        result_url = result
     # expect_regex = re.compile(rules["expected"])
     patterns = rules["expected"]
-    logger.info("expected_regex: {}".format(patterns))
+    print("expected_regex: {}".format(patterns))
     for pattern in patterns:
         match = re.search(pattern, result_url)
-        logger.info("match: {}".format(match))
+        print(match)
         if not match:
             return 0.
     return 1.
 
 
-@evaluator(
-    role="metric",
-)
 def is_expected_installed_extensions(installed_extensions, expected) -> float:
-    if not installed_extensions:
-        return 0.
-
-    logger.info("installed_extensions: ")
-    logger.info(installed_extensions)
+    print("installed_extensions: ")
+    print(installed_extensions)
     expected_extensions = expected["expected"]
 
     # whether the expected extensions are installed
@@ -145,46 +76,22 @@ def is_expected_installed_extensions(installed_extensions, expected) -> float:
         return 0.
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "type": "str: one of {'url'}; matching mode for the open tabs",
-        "urls": "list[str]: expected URLs of the open tabs compared as an unordered set via compare_urls",
-    },
-    summary="Checks if the expected tabs are open in Chrome.",
-)
 def is_expected_tabs(open_tabs: List[Dict[str, str]], rule: Dict[str, Any]) -> float:
     """
     Checks if the expected tabs are open in Chrome.
     """
-    if not open_tabs:
-        return 0.
 
     match_type = rule['type']
 
     if match_type == "url":
         expected_urls = rule['urls']
         actual_urls = [tab['url'] for tab in open_tabs]
-        if not are_lists_equal(expected_urls, actual_urls, compare_urls):
-            logger.error("list not match") 
-            logger.error(expected_urls)
-            logger.error(actual_urls)
-            return 0
         return 1 if are_lists_equal(expected_urls, actual_urls, compare_urls) else 0
     else:
         logger.error(f"Unknown type: {match_type}")
         return 0
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "type": "str: one of {'bookmark_bar_folders_names', 'bookmark_bar_websites_urls', 'liked_authors_websites_urls'}; bookmark check mode",
-        "names": "list[str]: expected folder names on the bookmark bar (used when type='bookmark_bar_folders_names')",
-        "urls": "list[str] or list[list[str]]: expected bookmark URLs; nested lists allow alternatives for 'liked_authors_websites_urls'",
-    },
-    summary="Checks if the expected bookmarks are in Chrome.",
-)
 def is_expected_bookmarks(bookmarks: List[str], rule: Dict[str, Any]) -> float:
     """
     Checks if the expected bookmarks are in Chrome.
@@ -205,10 +112,8 @@ def is_expected_bookmarks(bookmarks: List[str], rule: Dict[str, Any]) -> float:
                                      bookmark['type'] == 'folder' and bookmark['name'] == 'Liked Authors'), None)
         if liked_authors_folder:
             # Check if it contains the specified URLs
-            logger.info("'Liked Authors' folder exists")
             liked_authors_urls = [bookmark['url'] for bookmark in liked_authors_folder['children'] if
                                   bookmark['type'] == 'url']
-            logger.info("Here is the 'Liked Authors' folder's urls: {}".format(liked_authors_urls))
 
             urls = rule['urls']
 
@@ -228,16 +133,7 @@ def is_expected_bookmarks(bookmarks: List[str], rule: Dict[str, Any]) -> float:
         raise TypeError(f"{rule['type']} not support yet!")
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "expect": "dict: must contain key 'pattern' (str) holding a regex searched against the active tab URL",
-    },
-)
 def is_expected_search_query(active_tab_info: Dict[str, str], rules: Dict[str, Any]) -> float:
-    if not active_tab_info:
-        return 0.
-
     expected = rules['expect']
     pattern = expected['pattern']
     matched = re.search(pattern, active_tab_info['url'])
@@ -246,10 +142,6 @@ def is_expected_search_query(active_tab_info: Dict[str, str], rules: Dict[str, A
     return 0.
 
 
-@evaluator(
-    role="metric",
-    summary="Compare two PDF files.",
-)
 def compare_pdfs(pdf1_path: Union[str, List[str]], pdf2_path: Union[str, List[str]]):
     """
     Compare two PDF files.
@@ -280,21 +172,13 @@ import fitz
 from PIL import Image
 from borb.pdf import Document
 from borb.pdf import PDF
-import imagehash
 
 from pathlib import Path
 import typing
-import time
 
 
-@evaluator(
-    role="metric",
-)
 def compare_pdf_images(pdf1_path: str, pdf2_path: str, **kwargs) -> float:
     if not pdf1_path or not pdf2_path:
-        return 0.
-    if not all(map(os.path.exists, [pdf1_path, pdf2_path])):
-        logger.warning(f"PDF file does not exist: {pdf1_path} or {pdf2_path}")
         return 0.
 
     def extract_images_from_pdf(pdf_path):
@@ -303,67 +187,37 @@ def compare_pdf_images(pdf1_path: str, pdf2_path: str, **kwargs) -> float:
 
         for page_number in range(pdf_document.page_count):
             page = pdf_document[page_number]
-            for img_index, img in enumerate(page.get_images(full=True)):
-                xref = img[0]
-                base_image = pdf_document.extract_image(xref)
-                image_bytes = base_image["image"]
-                
-                # convert to PIL Image
-                try:
-                    pil_image = Image.open(io.BytesIO(image_bytes))
-                    images.append(pil_image)
-                except Exception as e:
-                    logger.error(f"Failed to process image in {pdf_path} on page {page_number}: {e}")
+            pixmap = page.get_pixmap()
+
+            img = Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples)
+
+            images.append(img)
 
         return images
-    
-    temp_dir = Path(pdf1_path).parent / "temp_pdf_comparison"
-    os.makedirs(temp_dir, exist_ok=True)
-    
-    temp_pdf1 = temp_dir / Path(pdf1_path).name
-    temp_pdf2 = temp_dir / Path(pdf2_path).name
 
-    shutil.copy(pdf1_path, temp_pdf1)
-    shutil.copy(pdf2_path, temp_pdf2)
+    def fix_pdf(in_path: Path, out_path: Path) -> None:
+        doc: typing.Optional[Document] = None
+        with open(in_path, "rb") as fh:
+            doc = PDF.loads(fh)
+        with open(out_path, "wb") as fh:
+            PDF.dumps(fh, doc)
 
-    try:
-        images1 = extract_images_from_pdf(str(temp_pdf1))
-        images2 = extract_images_from_pdf(str(temp_pdf2))
-    except Exception as e:
-        logger.error(f"Error extracting images from PDFs: {e}")
-        shutil.rmtree(temp_dir)
-        return 0.
-    finally:
-        shutil.rmtree(temp_dir)
+    fix_pdf(Path(pdf1_path), Path(pdf1_path))
+    fix_pdf(Path(pdf2_path), Path(pdf2_path))
 
+    images1 = extract_images_from_pdf(pdf1_path)
+    images2 = extract_images_from_pdf(pdf2_path)
 
     if len(images1) != len(images2):
-        logger.info(f"Different number of images found. Gold: {len(images1)}, Pred: {len(images2)}")
         return 0.
 
-    if not images1:
-        logger.info("No images found in either PDF. Considering it a match.")
-        return 1.0
+    for img1, img2 in zip(images1, images2):
+        if img1.tobytes() != img2.tobytes():
+            return 0.
 
-    hash_threshold = 5 
-    total_score = 0
-    for i, (img1, img2) in enumerate(zip(images1, images2)):
-        hash1 = imagehash.phash(img1)
-        hash2 = imagehash.phash(img2)
-        hash_diff = hash1 - hash2
-        
-        logger.info(f"Image {i+1}: Gold hash: {hash1}, Pred hash: {hash2}, Hash difference: {hash_diff}")
-
-        if hash_diff <= hash_threshold:
-            total_score +=1
-    
-    return total_score / len(images1)
+    return 1.
 
 
-@evaluator(
-    role="metric",
-    summary="Compare two archives. Note that the files in the archives should be of the same type.",
-)
 def compare_archive(pred_path: str, gold_path: str, **kwargs) -> float:
     """
     Compare two archives. Note that the files in the archives should be of the same type.
@@ -430,11 +284,7 @@ def compare_archive(pred_path: str, gold_path: str, **kwargs) -> float:
     return score / len(pred_files)
 
 
-@evaluator(
-    role="metric",
-    summary="Compare two HTML files.",
-)
-def compare_htmls(html_path1: str, html_path2: str, **options) -> float:
+def compare_htmls(html_path1: str, html_path2: str) -> float:
     """
     Compare two HTML files.
     """
@@ -442,45 +292,24 @@ def compare_htmls(html_path1: str, html_path2: str, **options) -> float:
         soup1 = BeautifulSoup(inf, 'lxml')
     with open(html_path2, 'r', encoding='utf-8') as inf:
         soup2 = BeautifulSoup(inf, 'lxml')
-    ignore_sdnum = options.get("ignore_sdnum", None)
 
     def compare_elements(elem1, elem2):
         if not (isinstance(elem1, Tag) and isinstance(elem2, Tag)):
-            if elem1 != elem2:
-                logger.info("not the same")
             return elem1 == elem2
         if elem1.name != elem2.name:
-            logger.info("html name not match")
             return False
         if elem1.text.strip() != elem2.text.strip():
-            logger.info("html text not match")
             return False
         if elem1.attrs != elem2.attrs:
-            if ignore_sdnum:
-                attrs1 = {k: v for k, v in elem1.attrs.items() if k != 'sdnum'}
-                attrs2 = {k: v for k, v in elem2.attrs.items() if k != 'sdnum'}
-                return attrs1 == attrs2
-            logger.info("html attrs not match")
-            logger.info(f"{elem1.attrs}")
-            logger.info(f"{elem2.attrs}")
             return False
         return True
 
     for elem1, elem2 in zip(soup1.recursiveChildGenerator(), soup2.recursiveChildGenerator()):
         if not compare_elements(elem1, elem2):
-            logger.info("html not match")
             return .0
     return 1.
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "type": "str: one of {'domains'}; cookie deletion check mode",
-        "domains": "list[str]: domains whose cookies must be absent (compared via compare_urls)",
-    },
-    summary="Check if the cookie is deleted.",
-)
 def is_cookie_deleted(cookie_data, rule):
     """
     Check if the cookie is deleted.
@@ -497,15 +326,6 @@ def is_cookie_deleted(cookie_data, rule):
         raise TypeError(f"{rule['type']} not support yet!")
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "type": "str: one of {'name', 'exec', 'url', 'id'}; desktop shortcut field to match ('url' and 'id' not yet supported)",
-        "name": "str: expected value of the 'Name=' line in the .desktop shortcut file (used when type='name')",
-        "exec": "str: expected value of the 'Exec=' line in the .desktop shortcut file (used when type='exec')",
-    },
-    summary="Check if the shortcut is on the desktop.",
-)
 def is_shortcut_on_desktop(shortcuts: Dict[str, str], rule):
     """
     Check if the shortcut is on the desktop.
@@ -515,12 +335,7 @@ def is_shortcut_on_desktop(shortcuts: Dict[str, str], rule):
         for shortcut_path, shortcut_content in shortcuts.items():
             if "Name=" + rule['name'] + "\n" in shortcut_content:
                 return 1.
-        return 0.0
-    elif rule['type'] == 'exec':
-        for shortcut_path, shortcut_content in shortcuts.items():
-            if "Exec=" + rule['exec'] + "\n" in shortcut_content:
-                return 1.
-        return 0.0
+        return 0.
     elif rule['type'] == 'url':
         raise TypeError(f"{rule['type']} not support yet!")
     elif rule['type'] == 'id':
@@ -529,14 +344,6 @@ def is_shortcut_on_desktop(shortcuts: Dict[str, str], rule):
         raise TypeError(f"{rule['type']} not support yet!")
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "type": "str: one of {'keywords'}; history deletion check mode",
-        "keywords": "list[str]: substrings that must not appear in any history entry's domain",
-    },
-    summary="Check if the history is deleted.",
-)
 def check_history_deleted(history_data, rule):
     """
     Check if the history is deleted.
@@ -553,14 +360,6 @@ def check_history_deleted(history_data, rule):
         raise TypeError(f"{rule['type']} not support yet!")
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "type": "str: one of {'names'}; experiment check mode",
-        "names": "list[str]: expected experiment names (the part before '@' in each enabled experiment), order-sensitive",
-    },
-    summary="Check if the enabled experiments are as expected.",
-)
 def check_enabled_experiments(enabled_experiments, rule):
     """
     Check if the enabled experiments are as expected.
@@ -573,16 +372,6 @@ def check_enabled_experiments(enabled_experiments, rule):
         raise TypeError(f"{rule['type']} not support yet!")
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "type": "str: one of {'value', 'range'}; font size check mode",
-        "value": "int|float: expected exact default font size (used when type='value')",
-        "min": "int|float: exclusive lower bound for the default font size (used when type='range')",
-        "max": "int|float: exclusive upper bound for the default font size (used when type='range')",
-    },
-    summary="Check if the font size is as expected.",
-)
 def check_font_size(font_size, rule):
     """
     Check if the font size is as expected.
@@ -597,13 +386,6 @@ def check_font_size(font_size, rule):
         raise TypeError(f"{rule['type']} not support yet!")
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "items": "list[str]: substrings that must all appear in the active tab's page content",
-    },
-    summary="Check if the item is added to the Steam cart.",
-)
 def is_added_to_steam_cart(active_tab_info, rule):
     """
     Check if the item is added to the Steam cart.

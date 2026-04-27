@@ -1,3 +1,4 @@
+import argparse
 from contextlib import asynccontextmanager
 import datetime
 import logging
@@ -51,7 +52,7 @@ logger.addHandler(sdebug_handler)
 #  }}} Logger Configs # 
 
 logger = logging.getLogger("desktopenv.main")
-available_vms: List[int] = list(range(16, -1, -1)) # at most 2 VMs for each worker
+available_vms: List[int] = list(range(8, -1, -1)) # at most 2 VMs for each worker
 active_vms: List[int] = []
 vm_map: Dict[str, Dict[str, Any]] = {}
 vm_lock = threading.Lock()
@@ -333,7 +334,17 @@ def _check_timeout():
 
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="OSGym FastAPI env service")
+    parser.add_argument("--host", default="0.0.0.0",
+                        help="Bind host (default: 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=20000,
+                        help="Bind port (default: 20000)")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
+    cli_args = _parse_args()
     try:
         # Create logs directory if it doesn't exist
         if not os.path.exists("logs"):
@@ -345,12 +356,12 @@ if __name__ == "__main__":
         signal.signal(signal.SIGINT, _signal_handler)
         signal.signal(signal.SIGTERM, _signal_handler)
         atexit.register(_cleanup_all_vms)
-        logger.info("Starting FastAPI server...")
+        logger.info(f"Starting FastAPI server on {cli_args.host}:{cli_args.port}...")
         # Start the FastAPI server
         uvicorn.run(
             app="main:app",
-            host="0.0.0.0",
-            port=20000
+            host=cli_args.host,
+            port=cli_args.port,
         )
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received, cleaning up...")

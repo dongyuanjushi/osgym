@@ -6,17 +6,7 @@ from typing import Dict
 
 from desktop_env.evaluators.getters.file import get_vm_file
 
-from ..schema import evaluator
 
-
-@evaluator(
-    role="getter",
-    config={
-        "ppt_file_path": "str: absolute path on the VM to the .pptx file containing the target slide",
-        "slide_index": "int: zero-based index of the slide whose background image should be extracted",
-        "dest": "str: destination file name under the local cache dir to save the extracted background image",
-    },
-)
 def get_background_image_in_slide(env, config: Dict[str, str]):
     ppt_file_path, slide_index, dest = config["ppt_file_path"], int(config["slide_index"]), config["dest"]
     image_id, image_file_path = None, None
@@ -78,14 +68,6 @@ def get_background_image_in_slide(env, config: Dict[str, str]):
         return get_vm_file(env, {"path": image_file_path, "dest": dest})
 
 
-@evaluator(
-    role="getter",
-    config={
-        "ppt_file_path": "str: absolute path on the VM to the .pptx file containing the target slide",
-        "slide_index": "int: zero-based index of the slide whose embedded/linked audio should be extracted",
-        "dest": "str: destination file name under the local cache dir to save the extracted audio",
-    },
-)
 def get_audio_in_slide(env, config: Dict[str, str]):
     ppt_file_path, slide_index, dest = config["ppt_file_path"], int(config["slide_index"]), config["dest"]
 

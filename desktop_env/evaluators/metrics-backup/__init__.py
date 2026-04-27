@@ -21,8 +21,7 @@ from .chrome import (
     is_expected_url_pattern_match,
     is_added_to_steam_cart,
     is_expected_installed_extensions,
-    compare_pdf_images,
-    is_expected_active_tab_approximate
+    compare_pdf_images
 )
 from .docs import (
     compare_font_names,
@@ -53,8 +52,7 @@ from .docs import (
     compare_docx_files_and_ignore_new_lines,
     compare_docx_images,
     compare_image_text,
-    compare_references,
-    compare_unique_train_records
+    compare_references
 )
 from .general import (
     check_csv,
@@ -156,16 +154,5 @@ from .vscode import (
 )
 
 
-# Imported under a private alias so the synthesis catalog (which walks
-# ``dir(metrics)`` and treats every public callable as a metric) doesn't
-# mistakenly register the decorator itself as a metric function.
-from ..schema import evaluator as _evaluator
-
-
-@_evaluator(
-    role="metric",
-    returns="None — sentinel marker that this task is infeasible",
-    summary="Sentinel metric marking a task as infeasible (not a real check).",
-)
 def infeasible():
     pass

@@ -97,6 +97,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--verify-mode", choices=["run", "debug"], default="run",
                     help="'run' = multi-process workers (production), "
                          "'debug' = sequential in main process (debugger-friendly)")
+    p.add_argument("--screen-width", type=int, default=1920,
+                    help="VM screen width. Used to scale 0..999-grid coordinates "
+                         "when the verifier LLM picks gui mode for a task.")
+    p.add_argument("--screen-height", type=int, default=1080,
+                    help="VM screen height. Used to scale 0..999-grid coordinates "
+                         "when the verifier LLM picks gui mode for a task.")
 
     # Output
     p.add_argument("--output-dir", type=str, default="synthetic_evaluation_examples")
@@ -174,11 +180,22 @@ def main():
     # "verify": run_verify loads the on-disk manifest and records outcomes
     #         to memory after verification completes.
     if args.mode == "full":
+        # Extract verify-loop parameters at the cli boundary so the
+        # synthesize→on_batch_complete→verify_examples chain threads them
+        # explicitly all the way down to the per-worker run_verify_example.
+        verify_max_steps = args.max_steps
+        verify_screen_size = (args.screen_width, args.screen_height)
+
         def _verify_batch(domain: str, batch: list) -> list:
             logger.info(
-                f"Interleaved verify: domain='{domain}' batch_size={len(batch)}"
+                f"Interleaved verify: domain='{domain}' batch_size={len(batch)} "
+                f"max_steps={verify_max_steps} screen_size={verify_screen_size}"
             )
-            return verify_examples(args, batch, vector_store)
+            return verify_examples(
+                args, batch, vector_store,
+                max_steps=verify_max_steps,
+                screen_size=verify_screen_size,
+            )
 
         run_synthesize(args, memory, vector_store, on_batch_complete=_verify_batch)
     elif args.mode == "synthesize":

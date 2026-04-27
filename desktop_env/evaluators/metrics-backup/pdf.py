@@ -5,16 +5,7 @@ from typing import Dict
 import fitz  # PyMuPDF
 from pypdf import PdfReader
 
-from ..schema import evaluator
 
-
-@evaluator(
-    role="metric",
-    rules={
-        "relation": "str: name of an operator module function (e.g. 'eq', 'lt', 'le', 'gt', 'ge', 'ne') to compare page count against ref_value",
-        "ref_value": "int: reference page count to compare the actual pdf page count against",
-    },
-)
 def check_pdf_pages(pdf_file: str, rules: Dict[str, Any]) -> float:
     if pdf_file is None:
         return 0.0
@@ -23,9 +14,6 @@ def check_pdf_pages(pdf_file: str, rules: Dict[str, Any]) -> float:
     return float(getattr(operator, rules["relation"])(nb_pages, rules["ref_value"]))
 
 
-@evaluator(
-    role="metric",
-)
 def extract_answers_from_pdf(pdf_file):
     doc = fitz.open(pdf_file)
     answers = []

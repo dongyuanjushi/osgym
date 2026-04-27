@@ -5,18 +5,9 @@ from collections import Counter
 from .general import get_vm_command_line
 import requests
 
-from ..schema import evaluator
-
 logger = logging.getLogger("desktopenv.getters.vlc")
 
 
-@evaluator(
-    role="getter",
-    config={
-        "dest": "str: destination file name under the local cache dir to save the VLC status.xml response",
-    },
-    summary="Gets the current playing information from VLC's HTTP interface.",
-)
 def get_vlc_playing_info(env, config: Dict[str, str]):
     """
     Gets the current playing information from VLC's HTTP interface.
@@ -41,13 +32,6 @@ def get_vlc_playing_info(env, config: Dict[str, str]):
     return _path
 
 
-@evaluator(
-    role="getter",
-    config={
-        "dest": "str: destination file name under the local cache dir to save the fetched vlcrc config",
-    },
-    summary="Reads the VLC configuration file to check setting.",
-)
 def get_vlc_config(env, config: Dict[str, str]):
     """
     Reads the VLC configuration file to check setting.
@@ -77,10 +61,6 @@ def get_vlc_config(env, config: Dict[str, str]):
     return _path
 
 
-@evaluator(
-    role="getter",
-    summary="Gets the default application for a category or file extension.",
-)
 def get_default_video_player(env, config: dict):
     """ Gets the default application for a category or file extension.
     """

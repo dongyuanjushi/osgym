@@ -27,7 +27,14 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from mm_agents.utils.call_llm import call_llm_with_single_response
 from mm_agents.utils.utils import parse_json_response
 
-from .prompts import TASK_GEN_SYSTEM, VERIFIER_GEN_SYSTEM
+from desktop_env.evaluators.schema import (
+    _first_doc_line,
+    get_schema,
+    required_config_keys,
+    required_rules_keys,
+)
+
+from .prompts import TASK_GEN_SYSTEM
 from .shared_memory import SynthesisMemory, VectorDedupStore
 
 logger = logging.getLogger("desktopenv.synthesis.task_creator")
@@ -54,9 +61,57 @@ class DomainInfo:
 
 @dataclass
 class FunctionCatalog:
-    setup_functions: List[Dict[str, str]] = field(default_factory=list)
-    getter_functions: List[Dict[str, str]] = field(default_factory=list)
-    metric_functions: List[Dict[str, str]] = field(default_factory=list)
+    """Static catalog of the setup / getter / metric functions the LLM may use.
+
+    Each entry is a dict with:
+      - ``name``      str: function name as referenced from synthesized scripts
+      - ``signature`` str: pretty signature for prompt context, e.g. "f(env, config)"
+      - ``doc``       str: first line of the docstring
+      - ``_sig``      Optional[inspect.Signature]: the actual Signature used by
+        ``validate_example_scripts`` to bind argument lists. ``self`` has
+        already been stripped on setup-controller methods.
+    """
+    setup_functions: List[Dict[str, Any]] = field(default_factory=list)
+    getter_functions: List[Dict[str, Any]] = field(default_factory=list)
+    metric_functions: List[Dict[str, Any]] = field(default_factory=list)
+
+    def index_by_name(self) -> Dict[str, Dict[str, Any]]:
+        """Return a flat name → entry map across all three function groups."""
+        idx: Dict[str, Dict[str, Any]] = {}
+        for f in self.setup_functions:
+            idx[f["name"]] = f
+        for f in self.getter_functions:
+            idx[f["name"]] = f
+        for f in self.metric_functions:
+            idx[f["name"]] = f
+        return idx
+
+
+def _stamp_synthesized_examples(
+    examples: List[Dict[str, Any]], domain: str
+) -> None:
+    """Assign post-synthesis identity fields in-place, exactly once per example.
+
+    The merged ``TASK_GEN_SYSTEM`` prompt no longer asks the LLM to emit
+    ``id`` or ``source`` (the output schema only lists ``snapshot`` /
+    ``instruction`` / ``config`` / ``related_apps`` / ``evaluator``), so we
+    deterministically stamp them here. Any pre-existing ``id`` from the LLM
+    is OVERWRITTEN with a fresh UUID4 — the in-prompt reference examples
+    carry real UUIDs the model could copy, and a duplicate ``id`` would
+    corrupt the manifest, the synthesis memory, and the on-disk
+    ``<domain>/<id>.json`` layout. ``source`` is fixed at ``"synthetic"``
+    to distinguish these from curated examples, and ``_domain`` is the
+    in-process tag the verify stage and memory writer key on.
+
+    The function mutates ``examples`` in place and returns ``None``; it is
+    called exactly once per batch (right after the LLM response is parsed)
+    so downstream code can rely on every accepted example having a unique,
+    canonical ``id``.
+    """
+    for ex in examples:
+        ex["id"] = str(uuid.uuid4())
+        ex["source"] = "synthetic"
+        ex["_domain"] = domain
 
 
 def discover_domains() -> List[str]:
@@ -71,13 +126,15 @@ def discover_domains() -> List[str]:
 
 
 def load_domain_examples(domain: str, max_examples: int = 0) -> DomainInfo:
+    
     domain_dir = os.path.join(EXAMPLES_DIR, domain)
     if not os.path.isdir(domain_dir):
         raise FileNotFoundError(f"Domain directory not found: {domain_dir}")
     info = DomainInfo(name=domain)
     json_files = sorted(glob.glob(os.path.join(domain_dir, "*.json")))
     info.example_files = json_files
-    to_load = json_files if max_examples <= 0 else json_files[:max_examples]
+    import random
+    to_load = json_files if max_examples <= 0 else random.sample(json_files, max_examples)
     for fp in to_load:
         with open(fp, "r") as f:
             info.examples.append(json.load(f))
@@ -85,13 +142,48 @@ def load_domain_examples(domain: str, max_examples: int = 0) -> DomainInfo:
     return info
 
 
-def _func_info(obj, name: str) -> Dict[str, str]:
+def _func_info(obj, name: str, *, drop_self: bool = False) -> Dict[str, Any]:
+    """Build a catalog entry for one function.
+
+    ``drop_self`` removes the leading ``self`` parameter from the live
+    Signature so that ``Signature.bind(...)`` can be applied to LLM-emitted
+    calls that look like ``_download_setup(files=...)`` (i.e. as the
+    SetupController binds them — without an explicit ``self`` argument).
+
+    Each entry also carries an evaluator ``schema`` (see
+    ``desktop_env.evaluators.schema``) — populated from the
+    ``@evaluator`` decorator when present, otherwise from a Sphinx-ish
+    docstring parser. The schema describes the dict keys the function
+    reads from its ``config`` / ``rules`` / ``options`` arguments and
+    the value it returns; ``_fmt_funcs`` renders this for the LLM and
+    ``validate_example_scripts`` consumes it to flag missing required
+    keys.
+    """
+    sig: Optional[inspect.Signature]
     try:
-        sig = str(inspect.signature(obj))
+        sig = inspect.signature(obj)
+        if drop_self:
+            params = [
+                p for p_name, p in sig.parameters.items() if p_name != "self"
+            ]
+            sig = sig.replace(parameters=params)
+        sig_str = str(sig)
     except (ValueError, TypeError):
-        sig = "(...)"
-    doc = (inspect.getdoc(obj) or "").split("\n")[0]
-    return {"name": name, "signature": f"{name}{sig}", "doc": doc}
+        sig = None
+        sig_str = "(...)"
+    schema = get_schema(obj)
+    # Prefer schema-declared summary; fall back to _first_doc_line so a
+    # docstring that opens with a "Config:" header doesn't surface the header
+    # itself as the summary line.
+    summary = schema.get("summary") or _first_doc_line(inspect.getdoc(obj))
+    return {
+        "name": name,
+        "signature": f"{name}{sig_str}",
+        "doc": summary,
+        "role": schema.get("role", ""),
+        "schema": schema,
+        "_sig": sig,
+    }
 
 
 def catalog_functions() -> FunctionCatalog:
@@ -102,7 +194,10 @@ def catalog_functions() -> FunctionCatalog:
         if name.startswith("_") and name.endswith("_setup"):
             obj = getattr(SetupController, name)
             if callable(obj):
-                cat.setup_functions.append(_func_info(obj, name))
+                # SetupController.setup() resolves these via local_namespace
+                # (binding self implicitly), so the LLM never passes self —
+                # drop it from the cataloged signature for binding checks.
+                cat.setup_functions.append(_func_info(obj, name, drop_self=True))
 
     from desktop_env.evaluators import getters as gmod
     for name in sorted(dir(gmod)):
@@ -117,10 +212,30 @@ def catalog_functions() -> FunctionCatalog:
         if callable(obj) and not name.startswith("_"):
             cat.metric_functions.append(_func_info(obj, name))
 
+    # Surface decorator coverage so it's obvious when @evaluator is missing or
+    # when a decorated function takes config/rules but declares no key schema
+    # (the validator's required-key check then has nothing to enforce, except
+    # what the small fallback registries cover).
+    def _coverage_stats(funcs: List[Dict[str, Any]], dict_arg: str) -> Tuple[int, int, int]:
+        decorated = sum(1 for f in funcs if (f.get("schema") or {}).get("source") == "decorator")
+        empty_schema = 0
+        for f in funcs:
+            sig = f.get("_sig")
+            if sig is None or dict_arg not in sig.parameters:
+                continue
+            schema = f.get("schema") or {}
+            if not schema.get(dict_arg):
+                empty_schema += 1
+        return len(funcs), decorated, empty_schema
+
+    g_total, g_decorated, g_empty = _coverage_stats(cat.getter_functions, "config")
+    m_total, m_decorated, m_empty = _coverage_stats(cat.metric_functions, "rules")
     logger.info(
         f"Cataloged {len(cat.setup_functions)} setup, "
-        f"{len(cat.getter_functions)} getter, "
-        f"{len(cat.metric_functions)} metric functions"
+        f"{g_total} getter ({g_decorated} decorated, {g_empty} take config but "
+        f"declare no schema keys), "
+        f"{m_total} metric ({m_decorated} decorated, {m_empty} take rules but "
+        f"declare no schema keys)"
     )
     return cat
 
@@ -130,8 +245,31 @@ def catalog_functions() -> FunctionCatalog:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def _fmt_funcs(funcs: List[Dict[str, str]]) -> str:
-    return "\n".join(f"- {f['signature']}: {f['doc']}" for f in funcs)
+def _fmt_funcs(funcs: List[Dict[str, Any]]) -> str:
+    """Render catalog entries for the LLM prompt, including schema lines.
+
+    Each function gets a header (``- name(sig): one-line summary``) and,
+    when a schema is available, indented ``config.<key>: ...`` /
+    ``rules.<key>: ...`` / ``options.<key>: ...`` lines plus an optional
+    ``returns: ...`` line. Optional keys are surfaced with a trailing
+    ``"?"`` so the LLM can tell required from optional.
+    """
+    lines: List[str] = []
+    for f in funcs:
+        header = f"- {f['signature']}: {f['doc']}"
+        schema = f.get("schema") or {}
+        for kind in ("config", "rules", "options"):
+            entries: Dict[str, str] = schema.get(kind, {}) or {}
+            if not entries:
+                continue
+            for key, desc in entries.items():
+                desc_one_line = (desc or "").splitlines()[0] if desc else ""
+                header += f"\n    {kind}.{key}: {desc_one_line}"
+        returns_desc = (schema.get("returns") or "").strip()
+        if returns_desc:
+            header += f"\n    returns: {returns_desc}"
+        lines.append(header)
+    return "\n".join(lines)
 
 
 def generate_task_examples(
@@ -142,6 +280,15 @@ def generate_task_examples(
     max_steps: int = 15,
     memory: Optional[SynthesisMemory] = None,
 ) -> List[Dict[str, Any]]:
+    """Generate full task examples — instruction + setup config + evaluator —
+    in a single LLM call.
+
+    The merged ``TASK_GEN_SYSTEM`` prompt covers task selection AND verifier
+    construction, so the model returns each example with its ``evaluator``
+    (``postconfig`` + ``eval``) already populated. There is no second pass:
+    examples without an ``eval`` field are rejected by the static validator
+    later in ``run_synthesize``.
+    """
     ref = json.dumps(domain_info.examples[:5], indent=2)
 
     # Build memory context (empty string if no prior experience)
@@ -160,21 +307,30 @@ def generate_task_examples(
         f"Keep tasks focused — each should explore one aspect of the software and "
         f"produce a clear, verifiable outcome.\n\n"
         f"{memory_block}"
-        f"## Reference examples\n{ref}\n\n"
+        f"## Reference examples (each shows a complete task with its evaluator)\n{ref}\n\n"
         f"## Setup functions\n{_fmt_funcs(catalog.setup_functions)}\n\n"
         f"## Getter functions\n{_fmt_funcs(catalog.getter_functions)}\n\n"
         f"## Metric functions\n{_fmt_funcs(catalog.metric_functions)}\n\n"
-        f"Generate {num_to_generate} new, diverse task example(s) for \"{domain_info.name}\".\n"
-        f"Each task should target a different feature or setting of the application, "
-        f"producing a distinct, observable state change that can be verified.\n"
-        f"Return a JSON array of task objects."
+        f"Generate {num_to_generate} new, diverse task example(s) for "
+        f"\"{domain_info.name}\".\n"
+        f"Each task must:\n"
+        f"  - target a different feature or setting of the application,\n"
+        f"  - produce a distinct, observable state change, AND\n"
+        f"  - ship with a fully-populated `evaluator` object containing both "
+        f"`postconfig` (list of setup-call strings) and a non-empty `eval` "
+        f"expression that follows the verifier-strength rubric in the system "
+        f"prompt.\n"
+        f"Return a JSON array of task objects (no markdown fences)."
     )
     messages = [
         {"role": "system", "content": TASK_GEN_SYSTEM},
         {"role": "user", "content": user},
     ]
 
-    logger.info(f"Generating {num_to_generate} task example(s) for '{domain_info.name}' ...")
+    logger.info(
+        f"Generating {num_to_generate} task+verifier example(s) for "
+        f"'{domain_info.name}' ..."
+    )
 
     raw = call_llm_with_single_response(
         messages=messages, llm_config=llm_config,
@@ -189,47 +345,23 @@ def generate_task_examples(
         return []
     if isinstance(parsed, dict):
         parsed = [parsed]
-    for ex in parsed:
-        if not ex.get("id"):
-            ex["id"] = str(uuid.uuid4())
+
+    # Stamp identity fields (id / source / _domain) once, here. The LLM is
+    # not asked to emit them, and any model-supplied id is overwritten so
+    # reference-example UUID copying can't collide with the manifest.
+    _stamp_synthesized_examples(parsed, domain_info.name)
+
+    missing_eval = sum(
+        1 for ex in parsed if not (ex.get("evaluator") or {}).get("eval")
+    )
+    if missing_eval:
+        logger.warning(
+            f"{missing_eval}/{len(parsed)} generated example(s) lack an "
+            f"`evaluator.eval` field — they will be rejected by static "
+            f"validation. Check the system prompt if this recurs."
+        )
     logger.info(f"Generated {len(parsed)} example(s)")
     return parsed
-
-
-def generate_verifier(
-    task_instruction: str,
-    task_config: List[str],
-    domain: str,
-    catalog: FunctionCatalog,
-    reference_evaluators: List[Dict[str, Any]],
-    llm_config: Dict[str, Any],
-) -> Dict[str, Any]:
-    ref = json.dumps(reference_evaluators[:5], indent=2)
-    user = (
-        f"Domain: {domain}\nInstruction: {task_instruction}\n"
-        f"Config: {json.dumps(task_config)}\n\n"
-        f"## Reference evaluators\n{ref}\n\n"
-        f"## Setup functions (for postconfig)\n{_fmt_funcs(catalog.setup_functions)}\n\n"
-        f"## Getter functions\n{_fmt_funcs(catalog.getter_functions)}\n\n"
-        f"## Metric functions\n{_fmt_funcs(catalog.metric_functions)}\n\n"
-        f"Generate a verifier. Return JSON: {{\"postconfig\": [...], \"eval\": \"...\"}}"
-    )
-    messages = [
-        {"role": "system", "content": VERIFIER_GEN_SYSTEM},
-        {"role": "user", "content": user},
-    ]
-    logger.info(f"Generating verifier for: '{task_instruction[:80]}' ...")
-    raw = call_llm_with_single_response(
-        messages=messages, llm_config=llm_config,
-        max_tokens=8000, temperature=0.7,
-    )
-    parsed = parse_json_response(raw)
-    if parsed is None:
-        logger.error("Failed to parse verifier response")
-        return {"postconfig": [], "eval": ""}
-    ev = {"postconfig": parsed.get("postconfig", []), "eval": parsed.get("eval", "")}
-    logger.info(f"Verifier eval: {ev['eval'][:120]}")
-    return ev
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -239,6 +371,30 @@ def generate_verifier(
 
 _EVAL_BUILTINS = {"float", "int", "str", "len", "bool", "abs", "max", "min"}
 
+# Sentinel for AST-extracted argument values that are not literal-evaluable
+# (e.g. a Name like ``env`` or a nested Call). These pass through Signature.bind
+# as opaque objects so binding still validates arity and kwarg names without
+# tripping on runtime values that don't exist statically.
+_OPAQUE = object()
+
+# Last-resort fallback registries for functions that don't yet declare a
+# schema (no ``@evaluator`` decorator and no ``Config:``/``Rules:`` block in
+# the docstring). The validator prefers schema-derived keys; this list is
+# only consulted when the schema yields nothing.
+_GETTER_FALLBACK_CONFIG_KEYS: Dict[str, List[str]] = {
+    "get_vm_file": ["path"],
+    "get_vm_command_line": ["command"],
+    "get_vm_command_error": ["command"],
+    "get_rule": ["rules"],
+    "get_rule_relativeTime": ["rules"],
+}
+_METRIC_FALLBACK_RULES_KEYS: Dict[str, List[str]] = {
+    "exact_match": ["expected"],
+    "match_in_list": ["expected"],
+    "is_in_list": ["expected"],
+    "fuzzy_match": ["expected"],
+}
+
 
 @dataclass
 class ValidationResult:
@@ -246,62 +402,451 @@ class ValidationResult:
     errors: List[str] = field(default_factory=list)
 
 
-def validate_example_scripts(example: Dict[str, Any], catalog: FunctionCatalog) -> ValidationResult:
-    """Statically validate the setup config and evaluator scripts of a synthesized example.
+@dataclass
+class _ParsedCall:
+    """AST-extracted call form, with literal-evaluable values resolved."""
+    func_name: str
+    pos_args: List[Any]
+    kwargs: Dict[str, Any]
+    has_splat: bool  # *args / **kwargs prevent static binding
 
-    Checks:
-      1. Every config / postconfig entry references a known setup function
-         and is syntactically valid Python.
-      2. The evaluator eval expression parses as Python and only calls known
-         getter / metric functions (or a small whitelist of builtins).
+
+def _parse_call(node: ast.Call) -> _ParsedCall:
+    """Extract a static call-form from an ``ast.Call`` node.
+
+    Args / kwargs whose AST values aren't literal-evaluable (Names like
+    ``env``, nested Calls, attribute lookups) are recorded as ``_OPAQUE``
+    so ``Signature.bind`` still checks arity without requiring runtime
+    values.
     """
-    setup_names = {f["name"] for f in catalog.setup_functions}
+    if isinstance(node.func, ast.Name):
+        func_name = node.func.id
+    elif isinstance(node.func, ast.Attribute):
+        func_name = node.func.attr
+    else:
+        func_name = "<expr>"
+
+    pos_args: List[Any] = []
+    has_splat = False
+    for a in node.args:
+        if isinstance(a, ast.Starred):
+            has_splat = True
+            continue
+        try:
+            pos_args.append(ast.literal_eval(a))
+        except Exception:
+            pos_args.append(_OPAQUE)
+
+    kwargs: Dict[str, Any] = {}
+    for kw in node.keywords:
+        if kw.arg is None:  # **kwargs splat
+            has_splat = True
+            continue
+        try:
+            kwargs[kw.arg] = ast.literal_eval(kw.value)
+        except Exception:
+            kwargs[kw.arg] = _OPAQUE
+
+    return _ParsedCall(
+        func_name=func_name,
+        pos_args=pos_args,
+        kwargs=kwargs,
+        has_splat=has_splat,
+    )
+
+
+def _check_signature(call: _ParsedCall, sig: Optional[inspect.Signature], label: str) -> List[str]:
+    """Bind the parsed call against the live Signature; report mismatches."""
+    if sig is None:
+        return []  # signature unavailable; best-effort skip
+    if call.has_splat:
+        return []  # *args/**kwargs erase static info
+    try:
+        bound = sig.bind(*call.pos_args, **call.kwargs)
+        bound.apply_defaults()
+    except TypeError as e:
+        return [
+            f"{label}: call to {call.func_name}(...) does not match the real "
+            f"implementation's signature {call.func_name}{sig}: {e}"
+        ]
+    return []
+
+
+def _resolve_dict_arg(
+    call: _ParsedCall, kw_name: str, pos_index: int
+) -> Optional[Dict[Any, Any]]:
+    """Pull the literal dict bound to ``kw_name`` (kwarg) or ``pos_index`` (positional)."""
+    if kw_name in call.kwargs:
+        val = call.kwargs[kw_name]
+    elif len(call.pos_args) > pos_index:
+        val = call.pos_args[pos_index]
+    else:
+        return None
+    if val is _OPAQUE or not isinstance(val, dict):
+        return None
+    return val
+
+
+def _resolve_rules_dict_for_metric(
+    metric_node: ast.Call, parsed: _ParsedCall
+) -> Optional[Dict[Any, Any]]:
+    """Static resolution of a metric's rules dict, following ``get_rule``.
+
+    The canonical synthesis pattern is
+    ``metric(getter(...), get_rule(env, config={'rules': {...}}))`` — the
+    rules dict for the metric is the inner ``rules`` config of the
+    ``get_rule`` call. ``_resolve_dict_arg`` only handles literal dicts, so
+    by itself it can't see through this indirection. This helper unpacks
+    one level of ``get_rule(...)`` and returns the inner literal dict when
+    statically available; otherwise falls back to ``_resolve_dict_arg`` for
+    the literal-dict case (``rules={...}`` written directly in the eval).
+    """
+    # 1. Literal dict written inline (rules={...}) — already covered.
+    direct = _resolve_dict_arg(parsed, "rules", pos_index=1)
+    if direct is not None:
+        return direct
+
+    # 2. Indirection via get_rule(env, config={'rules': {...}}).
+    if "rules" in parsed.kwargs:
+        # The kwarg was an opaque non-literal value; we need the AST node
+        # itself to recognise get_rule, which the parsed form has discarded.
+        # Locate the AST node for the rules kwarg.
+        for kw in metric_node.keywords:
+            if kw.arg == "rules":
+                rules_node = kw.value
+                break
+        else:
+            return None
+    elif len(metric_node.args) > 1:
+        rules_node = metric_node.args[1]
+    else:
+        return None
+
+    if not isinstance(rules_node, ast.Call):
+        return None
+    if not isinstance(rules_node.func, ast.Name) or rules_node.func.id != "get_rule":
+        return None
+    inner = _parse_call(rules_node)
+    cfg = _resolve_dict_arg(inner, "config", pos_index=1)
+    if not cfg:
+        return None
+    rules = cfg.get("rules")
+    return rules if isinstance(rules, dict) else None
+
+
+def _check_required_keys(
+    call: _ParsedCall,
+    label: str,
+    fn_info: Optional[Dict[str, Any]],
+    metric_node: Optional[ast.Call] = None,
+) -> List[str]:
+    """Verify literal dicts contain the keys the implementation reaches for.
+
+    Required keys are sourced from the function's evaluator schema (if it
+    exposes one) and otherwise from the ``_GETTER_FALLBACK_CONFIG_KEYS`` /
+    ``_METRIC_FALLBACK_RULES_KEYS`` baseline. Schema-driven checks expand
+    automatically as functions are annotated; the fallback covers the
+    most common cases for un-annotated functions.
+    """
+    errors: List[str] = []
+    schema = (fn_info or {}).get("schema") or {}
+
+    # ---- config (getter convention) ----------------------------------------
+    required_config = required_config_keys(schema)
+    if not required_config:
+        required_config = _GETTER_FALLBACK_CONFIG_KEYS.get(call.func_name, [])
+    if required_config:
+        cfg = _resolve_dict_arg(call, "config", pos_index=1)
+        if cfg is not None:
+            missing = [k for k in required_config if k not in cfg]
+            if missing:
+                errors.append(
+                    f"{label}: {call.func_name}(...) reads config[{missing[0]!r}] "
+                    f"in its implementation but the literal config dict only "
+                    f"has keys {sorted(cfg.keys())} — call will raise KeyError "
+                    f"at runtime"
+                )
+
+    # ---- rules (metric convention) -----------------------------------------
+    required_rules = required_rules_keys(schema)
+    if not required_rules:
+        required_rules = _METRIC_FALLBACK_RULES_KEYS.get(call.func_name, [])
+    if required_rules:
+        rules = (
+            _resolve_rules_dict_for_metric(metric_node, call)
+            if metric_node is not None
+            else _resolve_dict_arg(call, "rules", pos_index=1)
+        )
+        if rules is not None:
+            missing = [k for k in required_rules if k not in rules]
+            if missing:
+                errors.append(
+                    f"{label}: {call.func_name}(...) reads rules[{missing[0]!r}] "
+                    f"in its implementation but the literal rules dict only "
+                    f"has keys {sorted(rules.keys())} — call will raise KeyError "
+                    f"at runtime"
+                )
+
+    return errors
+
+
+def _validate_setup_entry(
+    entry: str,
+    setup_index: Dict[str, Dict[str, Any]],
+    label: str,
+) -> List[str]:
+    """Parse one setup-config string, look up the function, bind args."""
+    if not isinstance(entry, str) or not entry.strip():
+        return [f"{label}: setup entry is empty or not a string: {entry!r}"]
+    try:
+        tree = ast.parse(entry, mode="eval")
+    except SyntaxError as e:
+        return [
+            f"{label}: setup entry {entry!r} is not valid Python "
+            f"(syntax error: {e.msg} at offset {e.offset})"
+        ]
+    if not isinstance(tree.body, ast.Call):
+        return [
+            f"{label}: setup entry {entry!r} parses as Python but is not a "
+            f"function call (expected something like _open_setup(path=...))"
+        ]
+    call = _parse_call(tree.body)
+    info = setup_index.get(call.func_name)
+    if info is None:
+        return [
+            f"{label}: unknown setup function {call.func_name!r} — "
+            f"the SetupController has no method by that name; the LLM may "
+            f"have invented it"
+        ]
+    return _check_signature(call, info.get("_sig"), label)
+
+
+# Builtins that pass the inner expression's score through unchanged. When one
+# of these wraps a metric call, the metric is still the "outer" score-producing
+# call; ``_outer_score_calls`` recurses through them to find the real outer.
+_SCORE_PRESERVING_BUILTINS = {"float", "int", "bool", "abs"}
+
+
+def _outer_score_calls(tree: ast.AST) -> set:
+    """Identify call nodes whose return value is a conjunct of the eval.
+
+    A well-formed eval reduces to one or more 0/1-returning calls combined
+    with ``and`` / ``or``. Each such call must be a metric. This walker
+    descends through:
+
+    - ``and`` / ``or``  → every operand is a separate conjunct.
+    - ``not``           → the operand is the conjunct.
+    - comparisons       → the left side is the conjunct (e.g. ``metric(...) == 1``).
+    - score-preserving builtins (``float`` / ``int`` / ``bool`` / ``abs``) →
+      the first arg is the conjunct.
+
+    Anything else encountered as a top-level call is recorded as outer.
+    """
+    out: set = set()
+
+    def visit(node: ast.AST) -> None:
+        if isinstance(node, ast.BoolOp):
+            for v in node.values:
+                visit(v)
+        elif isinstance(node, ast.UnaryOp):
+            visit(node.operand)
+        elif isinstance(node, ast.Compare):
+            visit(node.left)
+        elif isinstance(node, ast.Call):
+            if (
+                isinstance(node.func, ast.Name)
+                and node.func.id in _SCORE_PRESERVING_BUILTINS
+                and node.args
+            ):
+                visit(node.args[0])
+            else:
+                out.add(id(node))
+        # Other nodes (Name, Constant, ...) at the top level can't produce a
+        # score on their own; the empty-eval branch already rejects those.
+
+    if isinstance(tree, ast.Expression):
+        visit(tree.body)
+    else:
+        visit(tree)
+    return out
+
+
+def _check_eval_call_role(
+    node: ast.Call,
+    call: _ParsedCall,
+    fn_info: Optional[Dict[str, Any]],
+    is_outer: bool,
+    parent_metric_name: Optional[str],
+) -> List[str]:
+    """Enforce the role contract declared by the ``@evaluator`` decorator.
+
+    - Every outer (score-producing) call must have ``role == "metric"`` so
+      the eval actually returns a 0/1 score per conjunct. A getter at the
+      outer position means there is no comparison happening at all.
+    - A call that appears as a positional argument to a metric must NOT
+      itself be a metric. Nesting metrics is almost always a synthesis
+      mistake — the outer metric receives a 0/1 score where it expects raw
+      VM state.
+    """
+    role = (fn_info or {}).get("role", "")
+    if not role:
+        return []  # role unknown (un-decorated; nothing to enforce)
+    errors: List[str] = []
+    if is_outer and role != "metric":
+        errors.append(
+            f"eval/{call.func_name}: top-level call has role={role!r}, but "
+            f"each conjunct of the eval must be a metric that returns a 0/1 "
+            f"score (e.g. exact_match, check_json, "
+            f"is_expected_url_pattern_match). Wrap the getter output in a "
+            f"metric, or replace the outer call entirely."
+        )
+    if (not is_outer) and role == "metric" and parent_metric_name is not None:
+        errors.append(
+            f"eval/{call.func_name}: metric call is nested inside "
+            f"{parent_metric_name}(...), which feeds it a 0/1 score where raw "
+            f"VM state is expected. Use a getter (role='getter') to extract "
+            f"state for the outer metric."
+        )
+    return errors
+
+
+def _build_metric_arg_parents(tree: ast.AST, fn_index: Dict[str, Dict[str, Any]]) -> Dict[int, str]:
+    """Map ``id(call_node) -> parent_metric_name`` for each call passed as a
+    positional argument to a metric. Only direct positional args are tracked;
+    kwargs (rules={...}, config={...}) are usually literal dicts, not calls.
+    """
+    parents: Dict[int, str] = {}
+    for parent in ast.walk(tree):
+        if not isinstance(parent, ast.Call):
+            continue
+        if not isinstance(parent.func, (ast.Name, ast.Attribute)):
+            continue
+        parent_name = parent.func.id if isinstance(parent.func, ast.Name) else parent.func.attr
+        info = fn_index.get(parent_name)
+        if not info or info.get("role") != "metric":
+            continue
+        for arg in parent.args:
+            if isinstance(arg, ast.Call):
+                parents[id(arg)] = parent_name
+    return parents
+
+
+def validate_example_scripts(example: Dict[str, Any], catalog: FunctionCatalog) -> ValidationResult:
+    """Statically validate the setup + evaluator scripts of a synthesized example.
+
+    Beyond syntax, every call is bound against the real function's
+    Signature, and a small registry of well-known dict-key requirements
+    (e.g. ``get_vm_file`` indexing ``config["path"]``) is checked against
+    literal dict arguments. The goal is to reject examples whose runtime
+    invocation would predictably raise — saving a VM round-trip and
+    surfacing a precise reason that gets stored in synthesis memory.
+
+    Returns a ``ValidationResult`` whose ``errors`` are full sentences
+    suitable for memory persistence and for prompting the LLM in
+    subsequent rounds.
+    """
+    setup_index = {f["name"]: f for f in catalog.setup_functions}
+    fn_index = catalog.index_by_name()
     eval_allowed = (
         {f["name"] for f in catalog.getter_functions}
         | {f["name"] for f in catalog.metric_functions}
         | _EVAL_BUILTINS
     )
+
     errors: List[str] = []
 
-    def check_setup(entry: str, label: str) -> None:
-        paren = entry.find("(")
-        if paren == -1:
-            errors.append(f"{label}: not a function call: {entry!r}")
-            return
-        func_name = entry[:paren].strip()
-        if func_name not in setup_names:
-            errors.append(f"{label}: unknown setup function: {func_name!r}")
-            return
-        try:
-            ast.parse(entry, mode="eval")
-        except SyntaxError as e:
-            errors.append(f"{label}: syntax error in setup string: {e}")
-
-    for i, entry in enumerate(example.get("config", [])):
-        check_setup(entry, f"config[{i}]")
+    # --- setup config + evaluator postconfig ---------------------------------
+    config_entries = example.get("config", [])
+    if not isinstance(config_entries, list):
+        errors.append(
+            "config: must be a list of setup-call strings, "
+            f"got {type(config_entries).__name__}"
+        )
+        config_entries = []
+    for i, entry in enumerate(config_entries):
+        errors.extend(_validate_setup_entry(entry, setup_index, f"config[{i}]"))
 
     evaluator = example.get("evaluator", {})
-    for i, entry in enumerate(evaluator.get("postconfig", [])):
-        check_setup(entry, f"postconfig[{i}]")
+    if not isinstance(evaluator, dict):
+        errors.append(
+            "evaluator: must be a dict with keys 'eval' and optionally "
+            f"'postconfig', got {type(evaluator).__name__}"
+        )
+        evaluator = {}
 
+    postconfig_entries = evaluator.get("postconfig", []) or []
+    if not isinstance(postconfig_entries, list):
+        errors.append(
+            "evaluator.postconfig: must be a list of setup-call strings, "
+            f"got {type(postconfig_entries).__name__}"
+        )
+        postconfig_entries = []
+    for i, entry in enumerate(postconfig_entries):
+        errors.extend(_validate_setup_entry(entry, setup_index, f"postconfig[{i}]"))
+
+    # --- eval expression -----------------------------------------------------
     eval_str = (evaluator.get("eval") or "").strip()
     if not eval_str:
-        errors.append("eval: empty eval expression")
-    else:
-        try:
-            tree = ast.parse(eval_str, mode="eval")
-            called = [
-                child.func.id for child in ast.walk(tree)
-                if isinstance(child, ast.Call) and isinstance(child.func, ast.Name)
-            ]
-            if not called:
-                errors.append("eval: expression contains no function calls")
-            else:
-                unknown = [n for n in called if n not in eval_allowed]
-                if unknown:
-                    errors.append(f"eval: unknown function(s): {unknown}")
-        except SyntaxError as e:
-            errors.append(f"eval: syntax error: {e}")
+        errors.append(
+            "eval: the verifier eval expression is empty — without it nothing "
+            "checks the resulting VM state"
+        )
+        return ValidationResult(valid=False, errors=errors)
+
+    try:
+        tree = ast.parse(eval_str, mode="eval")
+    except SyntaxError as e:
+        errors.append(
+            f"eval: expression {eval_str!r} is not valid Python "
+            f"(syntax error: {e.msg} at offset {e.offset})"
+        )
+        return ValidationResult(valid=False, errors=errors)
+
+    outer_call_ids = _outer_score_calls(tree)
+    metric_arg_parents = _build_metric_arg_parents(tree, fn_index)
+
+    calls_found = 0
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, (ast.Name, ast.Attribute)):
+            continue
+        calls_found += 1
+        call = _parse_call(node)
+
+        # Builtins are allowed but we don't bind their signatures (they
+        # accept too many shapes to be useful for static checks).
+        if call.func_name in _EVAL_BUILTINS:
+            continue
+
+        if call.func_name not in eval_allowed:
+            errors.append(
+                f"eval: expression calls unknown function {call.func_name!r}; "
+                f"only getters/metrics from the cataloged library plus the "
+                f"builtins {sorted(_EVAL_BUILTINS)} are permitted"
+            )
+            continue
+
+        info = fn_index.get(call.func_name)
+        if info is not None:
+            errors.extend(_check_signature(
+                call, info.get("_sig"), f"eval/{call.func_name}",
+            ))
+        errors.extend(_check_required_keys(
+            call, f"eval/{call.func_name}", info, metric_node=node,
+        ))
+        errors.extend(_check_eval_call_role(
+            node, call, info,
+            is_outer=id(node) in outer_call_ids,
+            parent_metric_name=metric_arg_parents.get(id(node)),
+        ))
+
+    if calls_found == 0:
+        errors.append(
+            "eval: expression parses but contains no function calls — "
+            "a verifier without a getter+metric composition cannot evaluate "
+            "anything"
+        )
 
     return ValidationResult(valid=len(errors) == 0, errors=errors)
 
@@ -357,7 +902,6 @@ def run_synthesize(
             f"(target={total_examples}, batch_size={batch_size})"
         )
         domain_info = load_domain_examples(domain, max_examples=args.max_ref_examples)
-        ref_evaluators = [ex.get("evaluator", {}) for ex in domain_info.examples]
         domain_dir = os.path.join(args.output_dir, domain)
         os.makedirs(domain_dir, exist_ok=True)
 
@@ -376,23 +920,20 @@ def run_synthesize(
             remaining = total_examples - (existing_valid + len(session_valid))
             n_this_batch = min(batch_size, remaining)
             batch_idx += 1
-            logger.info(
-                f"Domain '{domain}' batch {batch_idx}: generating {n_this_batch} "
-                f"(progress: {existing_valid + len(session_valid)}/{total_examples})"
-            )
+            # logger.info(
+            #     f"Domain '{domain}' batch {batch_idx}: generating {n_this_batch} "
+            #     f"(progress: {existing_valid + len(session_valid)}/{total_examples})"
+            # )
 
             examples = generate_task_examples(
                 domain_info, catalog, llm_config,
                 n_this_batch, args.max_steps, memory,
             )
-
-            for ex in examples:
-                if not ex.get("evaluator", {}).get("eval"):
-                    ex["evaluator"] = generate_verifier(
-                        ex.get("instruction", ""), ex.get("config", []),
-                        domain, catalog, ref_evaluators, llm_config,
-                    )
-                ex.setdefault("_domain", domain)
+            # Single-call synthesis emits the evaluator inline, and
+            # generate_task_examples has already stamped id / source /
+            # _domain via _stamp_synthesized_examples. Examples missing
+            # `evaluator.eval` fall through to static validation, which
+            # rejects them with a precise error recorded in synthesis memory.
 
             # 1) Static validation
             batch_valid: List[Dict[str, Any]] = []
@@ -411,7 +952,7 @@ def run_synthesize(
             # 2) Vector-DB dedup
             duplicates: List[Tuple[Dict[str, Any], Any]] = []
             
-            breakpoint()
+            # breakpoint()
             
             if vector_store is not None and batch_valid:
                 decision = vector_store.filter_batch(domain, batch_valid)
@@ -456,14 +997,14 @@ def run_synthesize(
                 for ex, err in statically_invalid:
                     memory.record(
                         example=ex, domain=domain,
-                        code_result={"score": 0.0, "error": f"script_validation: {err}"},
+                        code_result={"score": -1, "error": f"script_validation: {err}"},
                         executable=False,
                     )
                 for ex, match in duplicates:
                     memory.record(
                         example=ex, domain=domain,
                         code_result={
-                            "score": 0.0,
+                            "score": -1,
                             "error": f"duplicate_of={match.id} sim={match.similarity:.3f} [{match.source}]",
                         },
                         executable=False,
@@ -477,17 +1018,19 @@ def run_synthesize(
                         # Synthesize-only mode (no verification ran).
                         memory.record(
                             example=ex, domain=domain,
-                            code_result={"score": 0.0},
+                            code_result={"score": -1},
                             executable=True, solvable=None,
                         )
                     else:
-                        solvable = None if "error" in r else (r.get("score", 0) > 0)
+                        solvable = None if "error" in r else (r.get("score", -1) >= 0)
                         memory.record(
                             example=ex, domain=domain,
                             code_result=r,
                             executable=True, solvable=solvable,
                         )
                 memory.save()
+                
+            # breakpoint()
 
             session_valid.extend(batch_valid)
             logger.info(

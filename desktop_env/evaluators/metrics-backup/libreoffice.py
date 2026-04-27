@@ -5,8 +5,6 @@ import lxml.cssselect
 import lxml.etree
 from lxml.etree import _Element as Element
 
-from ..schema import evaluator
-
 _libconf_namespaces = [("oor", "http://openoffice.org/2001/registry")]
 _libconf_ns_mapping = dict(_libconf_namespaces)
 _setup_locale_selector = lxml.cssselect.CSSSelector('item[oor|path$=L10N]>prop[oor|name=ooSetupSystemLocale]>value',
@@ -15,12 +13,6 @@ _locale_selector = lxml.cssselect.CSSSelector('item[oor|path$=L10N]>prop[oor|nam
                                               namespaces=_libconf_ns_mapping)
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "locale_set": "list[str]: fnmatch patterns; the configured LibreOffice locale must match at least one",
-    },
-)
 def check_libre_locale(config_file: str, rules: Dict[str, List[str]]) -> float:
     config: Element = lxml.etree.parse(config_file).getroot()
     setup_locale_setting: List[Element] = _setup_locale_selector(config)

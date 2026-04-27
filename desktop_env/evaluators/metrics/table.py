@@ -32,6 +32,8 @@ from desktop_env.evaluators.metrics.utils import (
     load_pivot_tables,
 )
 
+from ..schema import evaluator
+
 # from openpyxl.utils import coordinate_to_tuple
 
 logger = logging.getLogger("desktopenv.metric.table")
@@ -179,6 +181,10 @@ def _safe_read_file(file_path: str) -> List[str]:
         ) from last_error
 
 
+@evaluator(
+    role="metric",
+    summary="Compare CSV files. If expected is a list, returns 1.0 if result matches any of the expected files.",
+)
 def compare_csv(result: str, expected: Union[str, List[str]], **options) -> float:
     """
     Compare CSV files. If expected is a list, returns 1.0 if result matches any of the expected files.
@@ -234,6 +240,10 @@ def compare_csv(result: str, expected: Union[str, List[str]], **options) -> floa
     return 0.0
 
 
+@evaluator(
+    role="metric",
+    summary="result (str): path to result xlsx",
+)
 def compare_table(result: str, expected: str = None, **options) -> float:
     #  function compare_table {{{ #
     """
@@ -744,6 +754,9 @@ def compare_table(result: str, expected: str = None, **options) -> float:
     #  }}} function compare_table #
 
 
+@evaluator(
+    role="metric",
+)
 def compare_conference_city_in_order(actual_city_list_path, expected_city):
     expected_city_list = expected_city["expected"]
     wb = openpyxl.load_workbook(actual_city_list_path)

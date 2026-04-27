@@ -2,19 +2,9 @@ import logging
 import os
 from typing import Dict
 
-from ..schema import evaluator
-
 logger = logging.getLogger("desktopenv.getters.gimp")
 
 
-@evaluator(
-    role="getter",
-    config={
-        "file_name": "str: GIMP config file name under ~/.config/GIMP/2.10/ on the VM",
-        "dest": "str: destination file name under the local cache dir to save the fetched config",
-    },
-    summary="Gets the config setting of GIMP.",
-)
 def get_gimp_config_file(env, config: Dict[str, str]):
     """
     Gets the config setting of GIMP.

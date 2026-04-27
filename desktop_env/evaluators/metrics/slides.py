@@ -7,11 +7,17 @@ from pptx import Presentation
 from pptx.util import Inches
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
+from ..schema import evaluator
+
 logger = logging.getLogger("desktopenv.metric.slides")
 
 # Add a new logger specifically for debugging PPTX comparisons
 debug_logger = logging.getLogger("desktopenv.metric.slides.debug")
 
+@evaluator(
+    role="metric",
+    summary="Enable debug logging for PPTX comparison",
+)
 def enable_debug_logging():
     """Enable debug logging for PPTX comparison"""
     debug_logger.setLevel(logging.DEBUG)
@@ -25,6 +31,10 @@ def enable_debug_logging():
 # Add debug logger for detailed comparison output
 debug_logger = logging.getLogger("desktopenv.metric.slides.debug")
 
+@evaluator(
+    role="metric",
+    summary="Enable detailed debug logging for PPTX comparison",
+)
 def enable_debug_logging():
     """Enable detailed debug logging for PPTX comparison"""
     debug_logger.setLevel(logging.DEBUG)
@@ -35,6 +45,9 @@ def enable_debug_logging():
         debug_logger.addHandler(handler)
 
 
+@evaluator(
+    role="metric",
+)
 def check_presenter_console_disable(config_file_path):
     try:
         tree = ET.parse(config_file_path)
@@ -59,6 +72,9 @@ def check_presenter_console_disable(config_file_path):
         return 0.
 
 
+@evaluator(
+    role="metric",
+)
 def check_image_stretch_and_center(modified_ppt, original_ppt):
     # fixme: this func is overfit to this example libreoffice_impress
     # Load the presentations
@@ -97,11 +113,17 @@ def check_image_stretch_and_center(modified_ppt, original_ppt):
     return 1.
 
 
+@evaluator(
+    role="metric",
+)
 def is_red_color(color):
     # judge if the color is red
     return color and color.rgb == (255, 0, 0)
 
 
+@evaluator(
+    role="metric",
+)
 def get_master_placeholder_color(prs):
     # get the color of the placeholder
     masters = prs.slide_masters
@@ -116,6 +138,9 @@ def get_master_placeholder_color(prs):
     return None
 
 
+@evaluator(
+    role="metric",
+)
 def check_slide_numbers_color(pptx_file_path):
     presentation = Presentation(pptx_file_path)
 
@@ -163,6 +188,10 @@ def check_slide_numbers_color(pptx_file_path):
 
 #     return similarity_index
 
+@evaluator(
+    role="metric",
+    summary="递归获取slide中所有包含文本的shapes，包括GROUP内部的",
+)
 def get_all_text_shapes(slide):
     """递归获取slide中所有包含文本的shapes，包括GROUP内部的"""
     
@@ -187,6 +216,9 @@ def get_all_text_shapes(slide):
     return all_text_shapes
 
 
+@evaluator(
+    role="metric",
+)
 def compare_pptx_files(file1_path, file2_path, **options):
     # todo: not strictly match since not all information is compared because we cannot get the info through pptx
     prs1 = Presentation(file1_path)
@@ -718,6 +750,14 @@ def compare_pptx_files(file1_path, file2_path, **options):
     return 1
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "slide_index_s": "list[int]: zero-based slide indices to inspect for strikethrough formatting",
+        "shape_index_s": "list[int]: zero-based shape indices within each selected slide whose text frames are checked",
+        "paragraph_index_s": "list[int]: zero-based paragraph indices within each selected shape; the first run of each must be struck through",
+    },
+)
 def check_strikethrough(pptx_path, rules):
     # Load the presentation
     presentation = Presentation(pptx_path)
@@ -749,6 +789,9 @@ def check_strikethrough(pptx_path, rules):
     return 1
 
 
+@evaluator(
+    role="metric",
+)
 def check_slide_orientation_Portrait(pptx_path):
     presentation = Presentation(pptx_path)
 
@@ -760,6 +803,13 @@ def check_slide_orientation_Portrait(pptx_path):
     return 0
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "rgb": "tuple[int, int, int]: target slide-background RGB color (0-255 each) used as the reference for the distance score",
+        "original_rgb": "optional. tuple[int, int, int]: pre-change RGB color; slides still matching this exactly are scored as unchanged (default None)",
+    },
+)
 def evaluate_presentation_fill_to_rgb_distance(pptx_file, rules):
     rgb = rules["rgb"]
 
@@ -817,6 +867,9 @@ def evaluate_presentation_fill_to_rgb_distance(pptx_file, rules):
     return similarity
 
 
+@evaluator(
+    role="metric",
+)
 def check_left_panel(accessibility_tree):
     namespaces = {
         'st': 'uri:deskat:state.at-spi.gnome.org',
@@ -835,6 +888,13 @@ def check_left_panel(accessibility_tree):
     return 0.
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "slide_idx": "int: zero-based slide index whose `ppt/slides/slide{idx+1}.xml` is parsed for a transition element",
+        "transition_type": "str: local name of the expected transition child element under <p:transition> (e.g. 'fade', 'dissolve', 'push')",
+    },
+)
 def check_transition(pptx_file, rules):
     slide_idx = rules['slide_idx']
     transition_type = rules['transition_type']
@@ -873,6 +933,12 @@ def check_transition(pptx_file, rules):
                 return 0.
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "color": "str: one of {'red', 'blue', 'green', 'black'}; expected dominant color category of the slide-master page-number text",
+    },
+)
 def check_page_number_colors(pptx_file, rules):
     color = rules["color"]
 
@@ -920,6 +986,12 @@ def check_page_number_colors(pptx_file, rules):
     return 1
 
 
+@evaluator(
+    role="metric",
+    rules={
+        "minutes": "int: expected LibreOffice AutoSaveTimeIntervall value in minutes (compared exactly against the registry prop)",
+    },
+)
 def check_auto_saving_time(pptx_file, rules):
     minutes = rules["minutes"]
 

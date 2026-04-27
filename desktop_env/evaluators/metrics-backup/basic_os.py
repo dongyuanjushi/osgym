@@ -1,12 +1,3 @@
-
-from ..schema import evaluator
-
-@evaluator(
-    role="metric",
-    rules={
-        "expected": "list[str]: expected GNOME favorite-apps .desktop entries (order-insensitive, exact set match)",
-    },
-)
 def check_gnome_favorite_apps(apps_str: str, rule):
     # parse the string like "['thunderbird.desktop', 'vim.desktop', 'google-chrome.desktop']"
     # to a list of strings
@@ -23,10 +14,6 @@ def check_gnome_favorite_apps(apps_str: str, rule):
         return 0
 
 
-@evaluator(
-    role="metric",
-    summary="Format as:",
-)
 def is_utc_0(timedatectl_output):
     """
     Format as:
@@ -47,9 +34,6 @@ System clock synchronized: yes
         return 0
 
 
-@evaluator(
-    role="metric",
-)
 def check_text_enlarged(scaling_factor_str):
     scaling_factor = float(scaling_factor_str)
     if scaling_factor > 1.0:
@@ -58,12 +42,6 @@ def check_text_enlarged(scaling_factor_str):
         return 0
 
 
-@evaluator(
-    role="metric",
-    rules={
-        "expected": "list[str]: expected jpg file names that should appear as children in the target directory (order-insensitive, exact set match)",
-    },
-)
 def check_moved_jpgs(directory_list, rule):
     expected_jpgs = rule["expected"]
     moved_jpgs = [node['name'] for node in directory_list['children']]
@@ -77,12 +55,6 @@ def check_moved_jpgs(directory_list, rule):
         return 0
 
 
-@evaluator(
-    role="metric",
-    config={
-        "expected": "str | list[str]: expected substring(s) that must all appear in the VM clipboard/terminal output",
-    },
-)
 def is_in_vm_clickboard(config, terminal_output):
     print("terminal_output: ")
     print(terminal_output)

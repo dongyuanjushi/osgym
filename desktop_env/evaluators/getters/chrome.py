@@ -16,6 +16,8 @@ from playwright.sync_api import sync_playwright, expect
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive, GoogleDriveFileList, GoogleDriveFile
 
+from ..schema import evaluator
+
 _accessibility_ns_map = {
     "st": "uri:deskat:state.at-spi.gnome.org",
     "attr": "uri:deskat:attributes.at-spi.gnome.org",
@@ -36,6 +38,15 @@ WARNING:
 """
 
 
+@evaluator(
+    role="getter",
+    config={
+        "url": "str: URL of the website to visit and extract information from",
+        "infos?": "optional. list[dict]: extraction operations; each dict has 'action' (one of 'inner_text', 'attribute', 'click_and_inner_text', 'click_and_attribute'), 'selector' (str or list[str]), and optional 'attribute' (str)",
+        "backups?": "optional. any: fallback value returned when extraction fails (default None)",
+    },
+    summary="Get information from a website. Especially useful when the information may be updated through time.",
+)
 def get_info_from_website(env, config: Dict[Any, Any]) -> Any:
     """ Get information from a website. Especially useful when the information may be updated through time.
     Args:
@@ -197,6 +208,9 @@ def get_info_from_website(env, config: Dict[Any, Any]) -> Any:
 
 
 # The following ones just need to load info from the files of software, no need to connect to the software
+@evaluator(
+    role="getter",
+)
 def get_default_search_engine(env, config: Dict[str, str]):
     os_type = env.vm_platform
     if os_type == 'Windows':
@@ -231,6 +245,13 @@ def get_default_search_engine(env, config: Dict[str, str]):
         return "Google"
 
 
+@evaluator(
+    role="getter",
+    config={
+        "dest": "str: filename inside env.cache_dir to write the copied Chrome Cookies SQLite database to",
+    },
+    summary="Get the cookies from the Chrome browser.",
+)
 def get_cookie_data(env, config: Dict[str, str]):
     """
     Get the cookies from the Chrome browser.
@@ -275,6 +296,12 @@ def get_cookie_data(env, config: Dict[str, str]):
         return None
 
 
+@evaluator(
+    role="getter",
+    config={
+        "dest": "str: filename inside env.cache_dir to write the copied Chrome History SQLite database to",
+    },
+)
 def get_history(env, config: Dict[str, str]):
     os_type = env.vm_platform
     if os_type == 'Windows':
@@ -316,6 +343,9 @@ def get_history(env, config: Dict[str, str]):
         return None
 
 
+@evaluator(
+    role="getter",
+)
 def get_enabled_experiments(env, config: Dict[str, str]):
     os_type = env.vm_platform
     if os_type == 'Windows':
@@ -350,6 +380,10 @@ def get_enabled_experiments(env, config: Dict[str, str]):
         return []
 
 
+@evaluator(
+    role="getter",
+    summary="Get the username from the Chrome browser.",
+)
 def get_profile_name(env, config: Dict[str, str]):
     """
     Get the username from the Chrome browser.
@@ -387,6 +421,9 @@ def get_profile_name(env, config: Dict[str, str]):
         return None
 
 
+@evaluator(
+    role="getter",
+)
 def get_chrome_language(env, config: Dict[str, str]):
     os_type = env.vm_platform
     if os_type == 'Windows':
@@ -421,6 +458,9 @@ def get_chrome_language(env, config: Dict[str, str]):
         return "en-US"
 
 
+@evaluator(
+    role="getter",
+)
 def get_chrome_font_size(env, config: Dict[str, str]):
     os_type = env.vm_platform
     if os_type == 'Windows':
@@ -462,6 +502,9 @@ def get_chrome_font_size(env, config: Dict[str, str]):
         }
 
 
+@evaluator(
+    role="getter",
+)
 def get_bookmarks(env, config: Dict[str, str]):
     os_type = env.vm_platform
     if os_type == 'Windows':
@@ -492,6 +535,10 @@ def get_bookmarks(env, config: Dict[str, str]):
 
 
 # todo: move this to the main.py
+@evaluator(
+    role="getter",
+    summary="Find the Chrome extensions directory based on the operating system.",
+)
 def get_extensions_installed_from_shop(env, config: Dict[str, str]):
     """Find the Chrome extensions directory based on the operating system."""
     os_type = env.vm_platform
@@ -535,6 +582,12 @@ def get_extensions_installed_from_shop(env, config: Dict[str, str]):
 # The following ones require Playwright to be installed on the target machine, and the chrome needs to be pre-config on
 # port info to allow remote debugging, see README.md for details
 
+@evaluator(
+    role="getter",
+    config={
+        "url": "str: URL to navigate to and capture title, url, and HTML content from",
+    },
+)
 def get_page_info(env, config: Dict[str, str]):
     host = env.vm_ip
     port = env.chromium_port  # fixme: this port is hard-coded, need to be changed from config file
@@ -620,6 +673,9 @@ def get_page_info(env, config: Dict[str, str]):
     return {'title': 'Unknown error', 'url': url, 'content': ''}
 
 
+@evaluator(
+    role="getter",
+)
 def get_open_tabs_info(env, config: Dict[str, str]):
     host = env.vm_ip
     port = env.chromium_port  # fixme: this port is hard-coded, need to be changed from config file
@@ -707,6 +763,13 @@ def get_open_tabs_info(env, config: Dict[str, str]):
     return []
 
 
+@evaluator(
+    role="getter",
+    config={
+        "goto_prefix?": "optional. str: prefix prepended to the address-bar text to form the full URL (default 'https://')",
+    },
+    summary="Playwright cannot get the url of active tab directly,",
+)
 def get_active_url_from_accessTree(env, config):
     """
         Playwright cannot get the url of active tab directly, 
@@ -778,6 +841,10 @@ def get_active_url_from_accessTree(env, config):
     return active_tab_url
 
 
+@evaluator(
+    role="getter",
+    summary="This function is used to get all info about active tab.",
+)
 def get_active_tab_info(env, config: Dict[str, str]):
     """
     This function is used to get all info about active tab.
@@ -868,6 +935,14 @@ def get_active_tab_info(env, config: Dict[str, str]):
     return None
 
 
+@evaluator(
+    role="getter",
+    config={
+        "path": "str: URL of the page to render and save as a PDF",
+        "dest": "str: filename inside env.cache_dir to write the rendered PDF to",
+    },
+    summary="Download a PDF from a URL.",
+)
 def get_pdf_from_url(env, config: Dict[str, str]) -> str:
     """
     Download a PDF from a URL.
@@ -982,6 +1057,9 @@ def get_pdf_from_url(env, config: Dict[str, str]) -> str:
 
 
 # fixme: needs to be changed (maybe through post-processing) since it's not working
+@evaluator(
+    role="getter",
+)
 def get_chrome_saved_address(env, config: Dict[str, str]):
     host = env.vm_ip
     port = env.chromium_port  # fixme: this port is hard-coded, need to be changed from config file
@@ -1059,6 +1137,9 @@ def get_chrome_saved_address(env, config: Dict[str, str]):
     return ""
 
 
+@evaluator(
+    role="getter",
+)
 def get_shortcuts_on_desktop(env, config: Dict[str, str]):
     # Find out the operating system
     os_name = env.vm_platform
@@ -1094,6 +1175,9 @@ def get_shortcuts_on_desktop(env, config: Dict[str, str]):
     return short_cuts
 
 
+@evaluator(
+    role="getter",
+)
 def get_number_of_search_results(env, config: Dict[str, str]):
     # todo: move into the config file
     url, result_selector = "https://google.com/search?q=query", '.search-result'
@@ -1171,6 +1255,18 @@ def get_number_of_search_results(env, config: Dict[str, str]):
     return 0
 
 
+@evaluator(
+    role="getter",
+    config={
+        "query": "list[str]: ordered Google Drive search queries (one per nesting level) identifying a single file to download",
+        "dest": "str or list[str]: destination filename(s) inside env.cache_dir; must be a list (matching length) when query_list/path_list is used",
+        "path": "list[str]: folder/file name segments on Google Drive identifying a single file, e.g. ['folder', 'subfolder', 'file.txt']",
+        "query_list": "list[list[str]]: list of query lists for downloading multiple files in one call",
+        "path_list": "list[list[str]]: list of path-segment lists for downloading multiple files in one call",
+        "settings_file?": "optional. str: path to the pydrive settings yaml (default 'evaluation_examples/settings/googledrive/settings.yml')",
+    },
+    summary="Get the desired file from Google Drive based on config, return the downloaded local filepath.",
+)
 def get_googledrive_file(env, config: Dict[str, Any]) -> Any:
     """ Get the desired file from Google Drive based on config, return the downloaded local filepath.
     @args: keys in config dict
@@ -1238,6 +1334,9 @@ def get_googledrive_file(env, config: Dict[str, Any]) -> Any:
         return _path_list
 
 
+@evaluator(
+    role="getter",
+)
 def get_enable_do_not_track(env, config: Dict[str, str]):
     os_type = env.vm_platform
     if os_type == 'Windows':
@@ -1271,6 +1370,9 @@ def get_enable_do_not_track(env, config: Dict[str, str]):
         return "false"
 
 
+@evaluator(
+    role="getter",
+)
 def get_enable_enhanced_safety_browsing(env, config: Dict[str, str]):
     os_type = env.vm_platform
     if os_type == 'Windows':
@@ -1304,6 +1406,9 @@ def get_enable_enhanced_safety_browsing(env, config: Dict[str, str]):
         return "Google"
 
 
+@evaluator(
+    role="getter",
+)
 def get_enable_safe_browsing(env, config: Dict[str, str]):
     os_type = env.vm_platform
     if os_type == 'Windows':
@@ -1338,6 +1443,9 @@ def get_enable_safe_browsing(env, config: Dict[str, str]):
         logger.error(f"Error: {e}")
         return "false"
 
+@evaluator(
+    role="getter",
+)
 def get_new_startup_page(env, config: Dict[str, str]):
     os_type = env.vm_platform
     if os_type == 'Windows':
@@ -1376,6 +1484,9 @@ def get_new_startup_page(env, config: Dict[str, str]):
         return "Google"
 
 
+@evaluator(
+    role="getter",
+)
 def get_find_unpacked_extension_path(env, config: Dict[str, str]):
     os_type = env.vm_platform
     if os_type == 'Windows':
@@ -1413,6 +1524,9 @@ def get_find_unpacked_extension_path(env, config: Dict[str, str]):
         return "Google"
 
 
+@evaluator(
+    role="getter",
+)
 def get_find_installed_extension_name(env, config: Dict[str, str]):
     os_type = env.vm_platform
     if os_type == 'Windows':
@@ -1450,6 +1564,10 @@ def get_find_installed_extension_name(env, config: Dict[str, str]):
         return "Google"
 
 
+@evaluator(
+    role="getter",
+    summary="This function is used to open th \"auto-delete\" mode of chromium",
+)
 def get_data_delete_automacally(env, config: Dict[str, str]):
     """
     This function is used to open th "auto-delete" mode of chromium
@@ -1484,6 +1602,24 @@ def get_data_delete_automacally(env, config: Dict[str, str]):
         return "Google"
 
 
+@evaluator(
+    role="getter",
+    config={
+        "category": "str: one of {'class', 'label', 'xpath', 'input', 'class&url'}; selects how to locate elements on the page",
+        "class_multiObject?": "optional. dict[str, dict[str, str]]: {class_name: {index_str: result_key}} extracting text by class and ordinal position",
+        "class_multiObject_child?": "optional. dict[str, dict[str, str]]: like class_multiObject but reads only direct text-node children of each matched element",
+        "class_multiObject_only_child?": "optional. dict[str, dict[str, str]]: like class_multiObject but reads the inner h3 child of each matched element",
+        "class_multiObject_search_exist?": "optional. dict[str, list[str]]: {class_name: [expected_texts]}; sets each text key to bool for presence, plus 'is_other_exist' when listed",
+        "class_singleObject?": "optional. dict[str, str]: {class_name: result_key} taking the first matched element's text",
+        "labelObject?": "optional. dict[str, str]: {label_text: result_key} extracting text from the first locator matching that label",
+        "xpathObject?": "optional. dict[str, str]: {xpath: result_key} extracting text content from elements located by XPath",
+        "inputObject?": "optional. dict[str, str]: {xpath: result_key} extracting input.value() from input elements located by XPath",
+        "class_multiObject_li?": "optional. dict[str, list[str]]: {class_name: [expected_texts]}; checks presence among 'li.catAllProducts span' descendants",
+        "url_include_expected?": "optional. list[str]: substrings checked (case-insensitive) against the active tab URL; each becomes a bool result key",
+        "url_include_expected_multichoice?": "optional. dict[str, str]: {url_substring: result_key}; sets result_key to bool based on URL containing the substring",
+    },
+    summary="This function is used to get the specific element's text content from the active tab's html.",
+)
 def get_active_tab_html_parse(env, config: Dict[str, Any]):
     """
     This function is used to get the specific element's text content from the active tab's html.
@@ -1948,6 +2084,15 @@ def get_active_tab_html_parse(env, config: Dict[str, Any]):
     return return_json
 
 
+@evaluator(
+    role="getter",
+    config={
+        "selector": "str: selector kind to use when extracting; currently only 'class' is implemented",
+        "class": "str: CSS class name (without leading dot) of the element whose text content to capture",
+        "order": "int or str: zero-based index of the matching element to read; if absent, the first matching element is used",
+    },
+    summary="especially used for www.recreation.gov examples",
+)
 def get_gotoRecreationPage_and_get_html_content(env, config: Dict[str, Any]):
     """
     especially used for www.recreation.gov examples
@@ -2255,6 +2400,15 @@ def get_gotoRecreationPage_and_get_html_content(env, config: Dict[str, Any]):
     }
 
 
+@evaluator(
+    role="getter",
+    config={
+        "parse_keys": "list[str]: query-parameter names to extract from the active tab URL",
+        "replace": "dict[str, str]: {original_key: new_key} renaming applied to the extracted parameters",
+        "split_list?": "optional. bool: if true, split each extracted value on ',' to produce a list (default false)",
+    },
+    summary="This function is used to parse the url according to config[\"parse_keys\"].",
+)
 def get_active_tab_url_parse(env, config: Dict[str, Any]):
     """
     This function is used to parse the url according to config["parse_keys"].
@@ -2288,6 +2442,16 @@ def get_active_tab_url_parse(env, config: Dict[str, Any]):
     return extracted_params
 
 
+@evaluator(
+    role="getter",
+    config={
+        "partIndex": "int or str: zero-based index of the '/'-separated URL segment to extract",
+        "returnType": "str: one of {'string', 'json'}; 'string' returns the segment, 'json' wraps it as {key: segment}",
+        "key": "str: result key used to wrap the extracted segment when returnType is 'json'",
+        "needDeleteId?": "optional. bool: if true, strip any '?...' query-string suffix from the segment (default false)",
+    },
+    summary="This function is used to extract one of the dash-separated part of the URL.",
+)
 def get_url_dashPart(env, config: Dict[str, str]):
     """
     This function is used to extract one of the dash-separated part of the URL.
@@ -2331,6 +2495,13 @@ def get_url_dashPart(env, config: Dict[str, str]):
         return None
 
 
+@evaluator(
+    role="getter",
+    config={
+        "parse_keys": "list[str]: Macy's path field names (e.g. 'Men_regular_size_t', 'Price_discount_range', 'Sleeve_length') to copy into the result",
+    },
+    summary="Parse Macy's product url path, extract:",
+)
 def get_macys_product_url_parse(env, config: Dict[str, str]):
     """
     Parse Macy's product url path, extract:
@@ -2393,6 +2564,10 @@ def get_macys_product_url_parse(env, config: Dict[str, str]):
 
 
 # Alias for backward compatibility - the old function name was too generic
+@evaluator(
+    role="getter",
+    summary="Alias for get_macys_product_url_parse to maintain backward compatibility.",
+)
 def get_url_path_parse(env, config: Dict[str, str]):
     """
     Alias for get_macys_product_url_parse to maintain backward compatibility.

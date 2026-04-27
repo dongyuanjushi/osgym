@@ -1,11 +1,6 @@
 from typing import List, Dict, Any
 
-from ..schema import evaluator
 
-
-@evaluator(
-    role="getter",
-)
 def get_replay(env, trajectory: List[Dict[str, Any]]) -> None:
     # fixme: need to be combined with the accessibility tree to activate the selection of the target window
     def parse(action):

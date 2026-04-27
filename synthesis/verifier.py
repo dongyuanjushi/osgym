@@ -1,10 +1,25 @@
-"""Verification: run a code-execution agent against synthesized tasks.
+"""Verification: two-stage LLM-routed action against synthesized tasks.
 
-Workers POST to the OSGym API server (``main.py``) to allocate a VM, send a
-single LLM-generated Python snippet, then ask the server to evaluate the
-resulting state. Solvable examples are copied to ``solvable/`` and, when a
-vector store is provided, their embeddings are added so future synthesis
-rounds can dedup against them.
+Workers POST to the OSGym API server (``main.py``) to allocate a VM, then
+run a two-stage decision pipeline per example:
+
+* **Stage 1 — route.** A small LLM call sees the task, the verifier
+  expression, and the post-reset screenshot, and returns
+  ``{"mode": "code"|"gui", "reason": ...}``. The router prompt strongly
+  prefers ``code`` and only picks ``gui`` when no programmatic path exists.
+
+* **Stage 2 — execute.** Branches on the chosen mode:
+    - ``code`` → second LLM call with ``CODE_VERIFIER_SYSTEM`` produces a
+      ``\`\`\`python ... \`\`\`` snippet that gets sent to ``/step``.
+    - ``gui``  → ``mm_agents.qwen35_vl.Qwen35VLAgent.predict`` produces one
+      pyautogui command (click/type/key/...) that gets sent to ``/step``.
+
+The two Stage 2 paths are mutually exclusive — the code stage cannot emit
+GUI input simulation, and the gui stage cannot run code. After Stage 2
+runs, ``/evaluate`` returns the reward. The mode chosen by the router is
+recorded on the result and on the trajectory. Solvable examples are
+copied to ``solvable/`` and, when a vector store is provided, their
+embeddings are added so future synthesis rounds can dedup against them.
 
 Memory recording happens *after* verification finishes — see
 ``run_verify`` (standalone) and ``run_synthesize`` (interleaved) for the
@@ -24,14 +39,15 @@ import signal
 import time
 import traceback
 from multiprocessing import Manager, Process, current_process
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests as http_requests
 
+from mm_agents.qwen35_vl import Qwen35VLAgent
 from mm_agents.utils.call_llm import call_llm_with_single_response
 from mm_agents.utils.utils import encode_screenshot
 
-from .prompts import CODE_EXEC_SYSTEM
+from .prompts import CODE_VERIFIER_SYSTEM, ROUTER_DECISION_SYSTEM
 from .shared_memory import SynthesisMemory, VectorDedupStore
 
 logger = logging.getLogger("desktopenv.synthesis.verifier")
@@ -92,6 +108,36 @@ def _api_shutdown(server_url: str, vm_id: int) -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+def _build_task_context(example: Dict[str, Any]) -> str:
+    """Render the task instruction + verifier expression as user-facing text."""
+    parts = [f"Task: {example['instruction']}"]
+    eval_expr = (example.get("evaluator") or {}).get("eval", "")
+    if eval_expr:
+        parts.append(
+            f"\nVerifier expression (this is how your result will be checked):\n"
+            f"  {eval_expr}\n"
+            f"Make sure your action produces the exact state this verifier expects."
+        )
+    return "\n".join(parts)
+
+
+def _persist_step_artifacts(
+    result_dir: str,
+    timestamp: str,
+    screenshot_b64: str,
+    trajectory: List[Dict[str, Any]],
+    reward: float,
+) -> None:
+    """Write the post-step screenshot, trajectory, and result.txt under result_dir."""
+    screenshot_bytes = base64.b64decode(screenshot_b64)
+    with open(os.path.join(result_dir, f"step_0_{timestamp}.png"), "wb") as fp:
+        fp.write(screenshot_bytes)
+    with open(os.path.join(result_dir, "trajectory.json"), "w") as fp:
+        json.dump(trajectory, fp, indent=2)
+    with open(os.path.join(result_dir, "result.txt"), "w") as fp:
+        fp.write(f"{reward}\n")
+
+
 def _extract_code_from_response(raw: str) -> str:
     """Extract Python code from the ```python ... ``` fence in the LLM response."""
     match = re.search(r'```python\s*\n(.*?)```', raw, re.DOTALL)
@@ -100,75 +146,322 @@ def _extract_code_from_response(raw: str) -> str:
     match = re.search(r'```\s*\n(.*?)```', raw, re.DOTALL)
     if match:
         return match.group(1).strip()
-    logger.warning("No ```python fence found in LLM response, using raw output")
+    logger.warning("No ```python fence found in code-stage response, using raw output")
     return raw.strip()
 
 
-def run_code_task(
+# Stage 1 router output is a JSON object. Keep the parser tolerant of LLMs
+# that wrap it in a ```json fence despite the prompt.
+_ROUTER_JSON_RE = re.compile(r'\{.*\}', re.DOTALL)
+
+
+def _decide_mode(
+    screenshot: bytes,
+    task_context: str,
+    llm_config: Dict[str, Any],
+    runtime_logger: logging.Logger,
+) -> Tuple[str, str]:
+    """Stage 1: decide whether to execute via code or gui for this example.
+
+    Returns ``(mode, reason)`` where ``mode`` is ``"code"`` or ``"gui"``.
+    Defaults to ``"code"`` on parse failure (the router prompt's stated
+    preference) and logs the failure so it can be debugged later.
+    """
+    messages = [
+        {"role": "system", "content": ROUTER_DECISION_SYSTEM},
+        {"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": encode_screenshot(screenshot)}},
+            {"type": "text", "text": task_context},
+        ]},
+    ]
+    raw = call_llm_with_single_response(
+        messages=messages, llm_config=llm_config,
+        max_tokens=400, temperature=0.0,
+    )
+
+    match = _ROUTER_JSON_RE.search(raw)
+    if not match:
+        runtime_logger.warning(
+            f"router response lacks JSON object; defaulting to code. raw={raw!r}"
+        )
+        return "code", "router parse failed (no JSON object); defaulted to code"
+
+    try:
+        decision = json.loads(match.group(0))
+    except json.JSONDecodeError as e:
+        runtime_logger.warning(
+            f"router JSON invalid ({e}); defaulting to code. raw={raw!r}"
+        )
+        return "code", f"router JSON invalid ({e}); defaulted to code"
+
+    mode = str(decision.get("mode", "")).strip().lower()
+    reason = str(decision.get("reason", "")).strip()
+    if mode not in {"code", "gui"}:
+        runtime_logger.warning(
+            f"router returned unexpected mode {mode!r}; defaulting to code"
+        )
+        return "code", f"router returned mode={mode!r}; defaulted to code"
+    return mode, reason
+
+
+def _run_code_action(
+    server_url: str,
+    vm_id: int,
+    screenshot: bytes,
+    task_context: str,
+    sleep_after_execution: float,
+    llm_config: Dict[str, Any],
+    result_dir: str,
+    mode_reason: str,
+) -> Dict[str, Any]:
+    """generate a python snippet and send it to /step.
+    The system prompt (``CODE_VERIFIER_SYSTEM``) forbids pyautogui /
+    xdotool / etc., so this stage produces only programmatic state changes.
+    """
+    proc = current_process().name
+    messages = [
+        {"role": "system", "content": CODE_VERIFIER_SYSTEM},
+        {"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": encode_screenshot(screenshot)}},
+            {"type": "text", "text": task_context},
+        ]},
+    ]
+    raw = call_llm_with_single_response(
+        messages=messages, llm_config=llm_config,
+        max_tokens=8000, temperature=0.7,
+    )
+    
+    breakpoint()
+    
+    code = _extract_code_from_response(raw)
+
+    ts = datetime.datetime.now().strftime("%Y%m%d@%H%M%S")
+    logger.info(f"[{proc}][code] generated: {code}")
+
+    step_data = _api_step(server_url, code, vm_id)
+    
+    breakpoint()
+    
+    time.sleep(sleep_after_execution)
+
+    time.sleep(5)
+    eval_data = _api_evaluate(server_url, vm_id)
+    
+    breakpoint()
+    
+    reward = eval_data["reward"]
+    logger.info(f"[{proc}][code] score={reward:.2f}")
+
+    trajectory = [{
+        "step": 0,
+        # "timestamp": ts,
+        "mode": "code",
+        "mode_reason": mode_reason,
+        "code": code,
+    }]
+    _persist_step_artifacts(result_dir, ts, step_data["screenshot"], trajectory, reward)
+    return {"mode": "code", "score": reward, "steps": 1, "mode_reason": mode_reason}
+
+
+def _run_gui_action(
+    server_url: str,
+    vm_id: int,
+    screenshot: bytes,
+    task_context: str,
+    sleep_after_execution: float,
+    llm_config: Dict[str, Any],
+    result_dir: str,
+    screen_size: Tuple[int, int],
+    runtime_logger: logging.Logger,
+    mode_reason: str,
+    max_steps: int,
+) -> Dict[str, Any]:
+    """Drive Qwen35VLAgent for up to ``max_steps`` predict→/step iterations.
+
+    Loop ends when the env signals done, the agent emits a terminate
+    sentinel (``DONE``/``FAIL``), or the step cap is reached. The pattern
+    mirrors ``lib_run_single.run_single_example`` but uses the OSGym HTTP
+    API instead of an in-process DesktopEnv. The agent emits pyautogui
+    commands only — no code execution, so the gui stage never overlaps
+    with ``_run_code_action``.
+    """
+    proc = current_process().name
+    agent = Qwen35VLAgent(
+        screen_size=screen_size,
+        approach="default",
+        policy_model=llm_config["model"],
+        policy_model_provider=llm_config["provider"],
+        policy_model_endpoint=llm_config["endpoint"],
+        logger=runtime_logger,
+    )
+    agent.reset(result_dir)
+
+    # Save the post-reset screenshot as step_0 so the trajectory has a
+    # complete visual record from t=0.
+    with open(os.path.join(result_dir, "step_0_initial.png"), "wb") as fp:
+        fp.write(screenshot)
+
+    obs: Dict[str, Any] = {"screenshot": screenshot}
+    trajectory: List[Dict[str, Any]] = []
+    done = False
+    step_idx = 0
+    error: Optional[str] = None
+
+    while not done and step_idx < max_steps:
+        try:
+            observation, thought, action_code = agent.predict(task_context, obs)
+            breakpoint()
+            
+        except Exception as e:
+            runtime_logger.error(
+                f"[{proc}][gui] predict failed at step {step_idx + 1}: {e}"
+            )
+            runtime_logger.error(traceback.format_exc())
+            error = f"predict: {e}"
+            break
+
+        ts = datetime.datetime.now().strftime("%Y%m%d@%H%M%S")
+        runtime_logger.info(
+            f"[{proc}][gui] step={step_idx + 1}/{max_steps} action={action_code!r}"
+        )
+
+        # Qwen35VLAgent.process_tool_call emits sentinel strings for the
+        # terminate / wait / fail actions. /step doesn't drive these — we
+        # interpret them client-side.
+        try:
+            step_data = _api_step(server_url, action_code, vm_id)
+            breakpoint()
+        except Exception as e:
+            runtime_logger.error(f"[{proc}][gui] /step failed: {e}")
+            error = f"step: {e}"
+            break
+
+        time.sleep(sleep_after_execution)
+
+        done = bool(step_data.get("is_finish"))
+        step_reward = float(step_data.get("reward", 0.0))
+        screenshot_b64 = step_data["screenshot"]
+
+        screenshot_path = os.path.join(result_dir, f"step_{step_idx + 1}_{ts}.png")
+        with open(screenshot_path, "wb") as fp:
+            fp.write(base64.b64decode(screenshot_b64))
+
+        trajectory.append({
+            "step_num": step_idx + 1,
+            "action_timestamp": ts,
+            "thought": thought,
+            "observation": observation,
+            "action": action_code,
+            "reward": step_reward,
+            "done": done,
+            "screenshot_file": os.path.basename(screenshot_path),
+        })
+
+        # Qwen35VLAgent.process_image normalizes either bytes or a base64
+        # string, so we can pass the /step screenshot through directly.
+        obs = {"screenshot": screenshot_b64}
+        step_idx += 1
+
+        if done:
+            break
+
+    # Final evaluation regardless of how the loop exited (mirrors
+    # lib_run_single.run_single_example).
+    time.sleep(5)
+    reward = 0.0
+    try:
+        eval_data = _api_evaluate(server_url, vm_id)
+        reward = float(eval_data["reward"])
+    except Exception as e:
+        runtime_logger.warning(f"[{proc}][gui] /evaluate failed: {e}")
+        if error is None:
+            error = f"evaluate: {e}"
+
+    runtime_logger.info(
+        f"[{proc}][gui] score={reward:.2f} steps={step_idx} done={done}"
+    )
+
+    with open(os.path.join(result_dir, "trajectory.json"), "w") as fp:
+        json.dump({
+            "mode": "gui",
+            "mode_reason": mode_reason,
+            "max_steps": max_steps,
+            "steps": trajectory,
+        }, fp, indent=2)
+    with open(os.path.join(result_dir, "result.txt"), "w") as fp:
+        fp.write(f"{reward}\n")
+
+    result: Dict[str, Any] = {
+        "mode": "gui",
+        "score": reward,
+        "steps": step_idx,
+        "done": done,
+        "mode_reason": mode_reason,
+    }
+    if error is not None:
+        result["error"] = error
+    return result
+
+
+def run_verify_example(
     server_url: str,
     example: Dict[str, Any],
     sleep_after_execution: float,
     llm_config: Dict[str, Any],
     result_dir: str,
+    screen_size: Tuple[int, int] = (1920, 1080),
+    runtime_logger: Optional[logging.Logger] = None,
+    max_steps: int = 15,
 ) -> Dict[str, Any]:
-    """Execute one example via a single LLM-generated code snippet through the API."""
-    proc = current_process().name
+    """Two-stage verification of a single example.
 
-    parts = [f"Task: {example['instruction']}"]
-    eval_expr = (example.get("evaluator") or {}).get("eval", "")
-    if eval_expr:
-        parts.append(
-            f"\nVerifier expression (this is how your result will be checked):\n"
-            f"  {eval_expr}\n"
-            f"Make sure your actions produce the exact state this verifier expects."
-        )
-    task_context = "\n".join(parts)
-    
+    Stage 1 (``_decide_mode``) returns ``"code"`` or ``"gui"`` plus a short
+    rationale, with strong preference for ``"code"``. Stage 2 dispatches:
+      - ``"code"`` → ``_run_code_action`` (one snippet, one /step).
+      - ``"gui"``  → ``_run_gui_action`` (multi-step Qwen35VLAgent loop, up
+        to ``max_steps`` predict→/step iterations or until done).
+
+    Both stages reuse the screenshot returned by ``/reset`` so they see the
+    same starting state.
+    """
+    proc = current_process().name
+    runtime_logger = runtime_logger or logger
+    task_context = _build_task_context(example)
 
     reset_data = _api_reset(server_url, example)
     vm_id = reset_data["vm_id"]
-    reward = 0
 
     try:
         screenshot = base64.b64decode(reset_data["screenshot"])
-
-        messages = [
-            {"role": "system", "content": CODE_EXEC_SYSTEM},
-            {"role": "user", "content": [
-                {"type": "image_url", "image_url": {"url": encode_screenshot(screenshot)}},
-                {"type": "text", "text": task_context},
-            ]},
-        ]
         
         breakpoint()
 
-        raw = call_llm_with_single_response(
-            messages=messages, llm_config=llm_config,
-            max_tokens=8000, temperature=0.7,
+        mode, mode_reason = _decide_mode(
+            screenshot, task_context, llm_config, runtime_logger,
         )
-        code = _extract_code_from_response(raw)
+        
+        breakpoint()
+        
+        logger.info(f"[{proc}][router] mode={mode} reason={mode_reason!r}")
 
-        ts = datetime.datetime.now().strftime("%Y%m%d@%H%M%S")
-        logger.info(f"[{proc}][code] generated: {code}")
+        if mode == "gui":
+            res = _run_gui_action(
+                server_url, vm_id, screenshot, task_context,
+                sleep_after_execution, llm_config, result_dir,
+                screen_size=screen_size,
+                runtime_logger=runtime_logger,
+                mode_reason=mode_reason,
+                max_steps=max_steps,
+            )
+        else:
+            res = _run_code_action(
+                server_url, vm_id, screenshot, task_context,
+                sleep_after_execution, llm_config, result_dir,
+                mode_reason=mode_reason,
+            )
 
-        step_data = _api_step(server_url, code, vm_id)
-        time.sleep(sleep_after_execution)
-
-        screenshot_bytes = base64.b64decode(step_data["screenshot"])
-        with open(os.path.join(result_dir, f"step_0_{ts}.png"), "wb") as fp:
-            fp.write(screenshot_bytes)
-
-        time.sleep(5)
-        eval_data = _api_evaluate(server_url, vm_id)
-        reward = eval_data["reward"]
-        logger.info(f"[{proc}][code] score={reward:.2f} for {example['id']}")
-
-        trajectory = [{"step": 0, "timestamp": ts, "code": code}]
-        with open(os.path.join(result_dir, "trajectory.json"), "w") as fp:
-            json.dump(trajectory, fp, indent=2)
-        with open(os.path.join(result_dir, "result.txt"), "w") as fp:
-            fp.write(f"{reward}\n")
-        return {"id": example["id"], "mode": "code", "score": reward, "steps": 1}
+        res["id"] = example["id"]
+        return res
 
     finally:
         _api_shutdown(server_url, vm_id)
@@ -179,8 +472,21 @@ def run_code_task(
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def worker(task_queue, args: argparse.Namespace, shared_results: list):
-    """Worker that pulls examples from the queue and runs code execution."""
+def worker(
+    task_queue,
+    args: argparse.Namespace,
+    shared_results: list,
+    max_steps: int,
+    screen_size: Tuple[int, int],
+):
+    """Worker that pulls examples from the queue and runs one verification.
+
+    Code mode runs a single LLM-generated snippet; gui mode runs the
+    Qwen35VLAgent loop for up to ``max_steps`` steps until done. The
+    ``max_steps`` and ``screen_size`` parameters are explicit (not read
+    from ``args``) so the synthesize→verify callback path can pass them
+    deliberately.
+    """
     proc = current_process().name
     llm_config = {"model": args.model, "provider": args.provider, "endpoint": args.endpoint}
 
@@ -193,14 +499,17 @@ def worker(task_queue, args: argparse.Namespace, shared_results: list):
         try:
             result_dir = os.path.join(
                 args.output_dir, example.get("_domain", "unknown"),
-                "trajectories", example["id"], "code",
+                "trajectories", example["id"], "verify",
             )
             os.makedirs(result_dir, exist_ok=True)
 
-            res = run_code_task(
+            res = run_verify_example(
                 args.server_url, example,
                 args.sleep_after_execution,
                 llm_config, result_dir,
+                screen_size=screen_size,
+                runtime_logger=logger,
+                max_steps=max_steps,
             )
             shared_results.append(res)
 
@@ -208,10 +517,10 @@ def worker(task_queue, args: argparse.Namespace, shared_results: list):
             logger.warning(f"[{proc}] KeyboardInterrupt")
             break
         except Exception as e:
-            logger.error(f"[{proc}] Error on code/{example['id']}: {e}")
+            logger.error(f"[{proc}] Error verifying {example['id']}: {e}")
             logger.error(traceback.format_exc())
             shared_results.append({
-                "id": example["id"], "mode": "code",
+                "id": example["id"], "mode": "unknown",
                 "score": 0.0, "error": str(e),
             })
 
@@ -274,9 +583,15 @@ def _process_verify_results(
     with open(agg_path, "w") as f:
         json.dump(list(agg_by_id.values()), f, indent=2)
 
-    code_scores = [r["score"] for r in results if "error" not in r]
-    avg = sum(code_scores) / max(len(code_scores), 1)
-    logger.info(f"Code avg={avg:.3f} ({len(code_scores)} tasks in this batch)")
+    scores = [r["score"] for r in results if "error" not in r]
+    avg = sum(scores) / max(len(scores), 1)
+    mode_counts: Dict[str, int] = {}
+    for r in results:
+        mode_counts[r.get("mode", "unknown")] = mode_counts.get(r.get("mode", "unknown"), 0) + 1
+    mode_summary = ", ".join(f"{m}={n}" for m, n in sorted(mode_counts.items()))
+    logger.info(
+        f"verify avg={avg:.3f} ({len(scores)} tasks in this batch; modes: {mode_summary})"
+    )
 
     by_id = {r["id"]: r for r in results}
     solvable_ids: List[str] = []
@@ -290,7 +605,7 @@ def _process_verify_results(
             solvable_ids.append(eid)
         else:
             unsolvable_ids.append(eid)
-            logger.info(f"UNSOLVABLE {eid}: code_score={r.get('score', 'missing')}")
+            logger.info(f"UNSOLVABLE {eid}: score={r.get('score', 'missing')}")
 
     # Copy solvables to solvable/ and push into vector store
     solvable_dir = os.path.join(args.output_dir, "solvable")
@@ -347,12 +662,24 @@ def _process_verify_results(
 def _run_verify_parallel(
     args: argparse.Namespace,
     examples: List[Dict[str, Any]],
+    *,
+    max_steps: int,
+    screen_size: Tuple[int, int],
 ) -> List[Dict[str, Any]]:
-    """Multi-process verification: workers pull examples from a queue."""
+    """Multi-process verification: workers pull examples from a queue.
+
+    ``max_steps`` and ``screen_size`` are passed explicitly to each worker
+    process — they drive the multi-step gui loop and coordinate scaling
+    respectively, and the chain from cli.py's _verify_batch callback all
+    the way down should make these values visible at every layer.
+    """
     global _processes
 
     total_workers = args.num_workers
-    logger.info(f"Verification (parallel): {len(examples)} examples across {total_workers} workers")
+    logger.info(
+        f"Verification (parallel): {len(examples)} examples across "
+        f"{total_workers} workers (max_steps={max_steps}, screen_size={screen_size})"
+    )
 
     manager = Manager()
     shared_results = manager.list()
@@ -365,7 +692,7 @@ def _run_verify_parallel(
     for pidx in range(total_workers):
         p = Process(
             target=worker,
-            args=(task_queue, args, shared_results),
+            args=(task_queue, args, shared_results, max_steps, screen_size),
             name=f"SynthWorker-{pidx}",
             daemon=True,
         )
@@ -398,39 +725,52 @@ def _run_verify_parallel(
 def _run_verify_sequential(
     args: argparse.Namespace,
     examples: List[Dict[str, Any]],
+    *,
+    max_steps: int,
+    screen_size: Tuple[int, int],
 ) -> List[Dict[str, Any]]:
-    """Sequential verification in the main process (debugger-friendly)."""
-    logger.info(f"Verification (sequential/debug): {len(examples)} examples")
+    """Sequential verification in the main process (debugger-friendly).
+
+    ``max_steps`` and ``screen_size`` are explicit so the synthesize→verify
+    callback path threads them deliberately rather than reading from args.
+    """
+    logger.info(
+        f"Verification (sequential/debug): {len(examples)} examples "
+        f"(max_steps={max_steps}, screen_size={screen_size})"
+    )
 
     llm_config = {"model": args.model, "provider": args.provider, "endpoint": args.endpoint}
     results: List[Dict[str, Any]] = []
 
     for ex_idx, example in enumerate(examples):
         logger.info(
-            f"[{ex_idx + 1}/{len(examples)}] Running code for {example['id']} "
+            f"[{ex_idx + 1}/{len(examples)}] Verifying {example['id']} "
             f"({example.get('instruction', '')})"
         )
         result_dir = os.path.join(
             args.output_dir, example.get("_domain", "unknown"),
-            "trajectories", example["id"], "code",
+            "trajectories", example["id"], "verify",
         )
         os.makedirs(result_dir, exist_ok=True)
 
         try:
-            res = run_code_task(
+            res = run_verify_example(
                 args.server_url, example,
                 args.sleep_after_execution,
                 llm_config, result_dir,
+                screen_size=screen_size,
+                runtime_logger=logger,
+                max_steps=max_steps,
             )
             results.append(res)
         except KeyboardInterrupt:
             logger.warning("KeyboardInterrupt — stopping verification")
             return results
         except Exception as e:
-            logger.error(f"Error on code/{example['id']}: {e}")
+            logger.error(f"Error verifying {example['id']}: {e}")
             logger.error(traceback.format_exc())
             results.append({
-                "id": example["id"], "mode": "code",
+                "id": example["id"], "mode": "unknown",
                 "score": 0.0, "error": str(e),
             })
 
@@ -441,8 +781,18 @@ def verify_examples(
     args: argparse.Namespace,
     examples: List[Dict[str, Any]],
     vector_store: Optional[VectorDedupStore] = None,
+    *,
+    max_steps: Optional[int] = None,
+    screen_size: Optional[Tuple[int, int]] = None,
 ) -> List[Dict[str, Any]]:
     """Run verification on a preloaded batch and post-process results.
+
+    ``max_steps`` and ``screen_size`` are required by the gui-mode loop and
+    coordinate scaling. Callers (cli.py's interleaved ``_verify_batch`` and
+    the standalone ``run_verify``) should pass them explicitly. If left as
+    ``None`` they fall back to the matching ``args`` attributes — this
+    fallback exists so the function stays usable from one-off scripts that
+    just hand it ``args``.
 
     Returns the raw per-example result dicts. Memory is intentionally NOT
     touched here — callers (``run_synthesize`` and ``run_verify``) record
@@ -451,11 +801,24 @@ def verify_examples(
     """
     if not examples:
         return []
-    verify_mode = getattr(args, "verify_mode", "run")
+    if max_steps is None:
+        max_steps = getattr(args, "max_steps", 15)
+    if screen_size is None:
+        screen_size = (
+            getattr(args, "screen_width", 1920),
+            getattr(args, "screen_height", 1080),
+        )
+
+    # verify_mode = getattr(args, "verify_mode", "run")
+    verify_mode = "debug"
     if verify_mode == "debug":
-        results = _run_verify_sequential(args, examples)
+        results = _run_verify_sequential(
+            args, examples, max_steps=max_steps, screen_size=screen_size,
+        )
     else:
-        results = _run_verify_parallel(args, examples)
+        results = _run_verify_parallel(
+            args, examples, max_steps=max_steps, screen_size=screen_size,
+        )
     return _process_verify_results(results, examples, args, vector_store)
 
 
@@ -490,7 +853,15 @@ def run_verify(
         logger.info("All examples already verified — nothing to do")
         return []
 
-    results = verify_examples(args, examples, vector_store)
+    max_steps = getattr(args, "max_steps", 15)
+    screen_size = (
+        getattr(args, "screen_width", 1920),
+        getattr(args, "screen_height", 1080),
+    )
+    results = verify_examples(
+        args, examples, vector_store,
+        max_steps=max_steps, screen_size=screen_size,
+    )
 
     # Memory record + persist AFTER verification
     if memory is not None:
