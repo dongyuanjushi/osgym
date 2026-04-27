@@ -675,7 +675,7 @@ def _run_verify_parallel(
     """
     global _processes
 
-    total_workers = args.num_workers
+    total_workers = getattr(args, "verification_workers", 1)
     logger.info(
         f"Verification (parallel): {len(examples)} examples across "
         f"{total_workers} workers (max_steps={max_steps}, screen_size={screen_size})"

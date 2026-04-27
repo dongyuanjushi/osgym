@@ -92,18 +92,23 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Max steps for code execution; also guides task complexity during synthesis")
 
     # Parallelism / per-stage execution mode
-    p.add_argument("--num-workers", type=int, default=2,
-                    help="Number of parallel workers (threads for synthesis, "
-                         "processes for verification) when the corresponding "
-                         "stage runs in parallel mode.")
+    p.add_argument("--synthesize-workers", type=int, default=2,
+                    help="Number of synthesis worker threads when "
+                         "--synthesize-mode=parallel. Sized for I/O-bound LLM calls; "
+                         "ignored when synthesize mode is sequential.")
+    p.add_argument("--verification-workers", type=int, default=2,
+                    help="Number of verification worker processes when "
+                         "--verification-mode=parallel. Each worker holds a VM for the "
+                         "duration of one example; ignored when verification mode is sequential.")
     p.add_argument("--synthesize-mode", choices=["sequential", "parallel"], default="sequential",
                     help="'sequential' = process domains one at a time in the main thread; "
-                         "'parallel' = process up to --num-workers domains concurrently "
+                         "'parallel' = process up to --synthesize-workers domains concurrently "
                          "via a thread pool (LLM calls are I/O-bound).")
     p.add_argument("--verification-mode", choices=["sequential", "parallel"], default="sequential",
                     help="'sequential' = run examples one at a time in the main process "
                          "(debugger-friendly); "
-                         "'parallel' = multi-process workers pulling examples from a queue.")
+                         "'parallel' = --verification-workers worker processes pulling "
+                         "examples from a queue.")
     p.add_argument("--screen-width", type=int, default=1920,
                     help="VM screen width. Used to scale 0..999-grid coordinates "
                          "when the verifier LLM picks gui mode for a task.")

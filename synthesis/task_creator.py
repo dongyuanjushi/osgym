@@ -1232,7 +1232,7 @@ def _run_synthesize_parallel(
     bookkeeping is serialized via a single ``write_lock`` shared by every
     worker.
     """
-    num_workers = max(1, min(args.num_workers, len(targets)))
+    num_workers = max(1, min(getattr(args, "synthesize_workers", 1), len(targets)))
     logger.info(
         f"Synthesis (parallel): {len(targets)} domain(s) across "
         f"{num_workers} worker thread(s) "
@@ -1287,9 +1287,9 @@ def run_synthesize(
 
     ``args.synthesize_mode`` selects the dispatcher:
       - ``"sequential"`` (default): one domain at a time in the main thread.
-      - ``"parallel"``: a thread pool of size ``args.num_workers`` runs one
-        domain per worker; a shared lock serializes memory + vector-store
-        bookkeeping while LLM calls run concurrently.
+      - ``"parallel"``: a thread pool of size ``args.synthesize_workers``
+        runs one domain per worker; a shared lock serializes memory +
+        vector-store bookkeeping while LLM calls run concurrently.
 
     ``on_batch_complete`` (optional) returns the verification results for
     the accepted examples so this function can fold them into memory.
