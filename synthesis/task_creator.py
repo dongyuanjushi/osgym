@@ -649,6 +649,10 @@ def _validate_download_urls(files: List[Any], label: str) -> List[str]:
     streaming GET and read a small chunk so a fabricated or 404 link surfaces
     as a validation error before the example reaches the VM stage.
 
+    Errors carry the ``download_url:`` category prefix so callers and memory
+    summaries can distinguish network-fetch failures from other setup
+    problems (e.g. ``missing_file_setup``).
+
     Non-literal entries (resolved to ``_OPAQUE`` by the AST parser) are left
     alone — we can't tell statically what URL would be passed.
     """
@@ -656,33 +660,37 @@ def _validate_download_urls(files: List[Any], label: str) -> List[str]:
     for i, f in enumerate(files):
         if f is _OPAQUE:
             errors.append(
-                f"{label}: _download_setup files[{i}] is not a literal dict — "
-                f"the synthesis pipeline cannot statically verify the URL"
+                f"{label}: download_url: _download_setup files[{i}] is not a "
+                f"literal dict — the synthesis pipeline cannot statically "
+                f"verify the URL"
             )
             continue
         if not isinstance(f, dict):
             errors.append(
-                f"{label}: _download_setup files[{i}] is not a dict "
-                f"(got {type(f).__name__}); expected {{'url': ..., 'path': ...}}"
+                f"{label}: download_url: _download_setup files[{i}] is not a "
+                f"dict (got {type(f).__name__}); expected "
+                f"{{'url': ..., 'path': ...}}"
             )
             continue
         url = f.get("url")
         path = f.get("path")
         if not isinstance(url, str) or not url.strip():
             errors.append(
-                f"{label}: _download_setup files[{i}] has missing or empty 'url'"
+                f"{label}: download_url: _download_setup files[{i}] has "
+                f"missing or empty 'url'"
             )
             continue
         if not isinstance(path, str) or not path.strip():
             errors.append(
-                f"{label}: _download_setup files[{i}] has missing or empty 'path'"
+                f"{label}: download_url: _download_setup files[{i}] has "
+                f"missing or empty 'path'"
             )
             # still probe the URL — both fields are required, but the URL probe
             # is the more interesting failure to surface.
         if not url.lower().startswith(("http://", "https://")):
             errors.append(
-                f"{label}: _download_setup url {url!r} is not http(s) — only "
-                f"web URLs are probeable; pick a real download endpoint"
+                f"{label}: download_url: {url!r} is not http(s) — only web "
+                f"URLs are probeable; pick a real download endpoint"
             )
             continue
         try:
@@ -700,19 +708,58 @@ def _validate_download_urls(files: List[Any], label: str) -> List[str]:
                 chunk = next(resp.iter_content(chunk_size=_DOWNLOAD_PROBE_BYTES), b"")
                 if not chunk:
                     errors.append(
-                        f"{label}: _download_setup url {url!r} returned an "
-                        f"empty body — the URL likely no longer exists"
+                        f"{label}: download_url: {url!r} returned an empty "
+                        f"body — the URL likely no longer exists"
                     )
             finally:
                 resp.close()
         except requests.RequestException as e:
             errors.append(
-                f"{label}: _download_setup url {url!r} is not reachable "
+                f"{label}: download_url: {url!r} is not reachable "
                 f"({type(e).__name__}: {e}) — the URL is fabricated or no "
                 f"longer hosted; remove the download step or pick an existing "
                 f"resource"
             )
     return errors
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Setup-sequence file lifecycle
+#
+# The Ubuntu VM boots from a clean snapshot — there are NO pre-existing app
+# files. Every file the task touches must be created or uploaded inside
+# ``config`` BEFORE it's opened or referenced. The sets below classify each
+# setup helper by how it interacts with the VM filesystem so the sequence
+# validator can detect ``_open_setup(path=X)`` calls that reference paths no
+# earlier setup entry actually produced.
+#
+#   Producers — declare a literal destination ``path`` that we can track.
+#   Opaque    — run shell commands; could create anything, so they disable the
+#               "missing file" check for subsequent consumers.
+#   Consumers — require the named path to already exist on the VM.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Setup helpers whose ``files=[{"url":..., "path":...}, ...]`` (or
+# ``{"local_path":..., "path":...}``) argument names a literal destination on
+# the VM. The dict's ``"path"`` key is the on-VM path that becomes available
+# after the helper runs.
+_FILES_LIST_PRODUCERS: Tuple[str, ...] = ("_download_setup", "_upload_file_setup")
+
+# Helpers that run arbitrary shell or launch a process. We can't know what
+# files they leave behind, so seeing one disables ``missing_file_setup``
+# checks for everything that follows in the same setup list (avoids false
+# positives — the LLM may legitimately write a file via ``cat <<EOF`` and
+# then open it).
+_OPAQUE_SHELL_SETUPS: frozenset = frozenset({
+    "_command_setup",
+    "_execute_setup",
+    "_execute_with_verification_setup",
+    "_launch_setup",
+    "_googledrive_setup",
+})
+
+# Helpers whose first ``path`` argument MUST already exist on the VM.
+_PATH_CONSUMERS: Tuple[str, ...] = ("_open_setup", "_change_wallpaper_setup")
 
 
 def _resolve_rules_dict_for_metric(
@@ -822,45 +869,165 @@ def _validate_setup_entry(
     entry: str,
     setup_index: Dict[str, Dict[str, Any]],
     label: str,
-) -> List[str]:
-    """Parse one setup-config string, look up the function, bind args."""
+) -> Tuple[List[str], Optional[_ParsedCall]]:
+    """Parse one setup-config string, look up the function, bind args.
+
+    Returns ``(errors, parsed_call_or_None)``. The parsed call is returned so
+    sequence-level checks (e.g. ``missing_file_setup``) can inspect it
+    without re-parsing.
+    """
     if not isinstance(entry, str) or not entry.strip():
-        return [f"{label}: setup entry is empty or not a string: {entry!r}"]
+        return [f"{label}: setup entry is empty or not a string: {entry!r}"], None
     try:
         tree = ast.parse(entry, mode="eval")
     except SyntaxError as e:
-        return [
-            f"{label}: setup entry {entry!r} is not valid Python "
-            f"(syntax error: {e.msg} at offset {e.offset})"
-        ]
+        return (
+            [
+                f"{label}: setup entry {entry!r} is not valid Python "
+                f"(syntax error: {e.msg} at offset {e.offset})"
+            ],
+            None,
+        )
     if not isinstance(tree.body, ast.Call):
-        return [
-            f"{label}: setup entry {entry!r} parses as Python but is not a "
-            f"function call (expected something like _open_setup(path=...))"
-        ]
+        return (
+            [
+                f"{label}: setup entry {entry!r} parses as Python but is not a "
+                f"function call (expected something like _open_setup(path=...))"
+            ],
+            None,
+        )
     call = _parse_call(tree.body)
     info = setup_index.get(call.func_name)
     if info is None:
-        return [
-            f"{label}: unknown setup function {call.func_name!r} — "
-            f"the SetupController has no method by that name; the LLM may "
-            f"have invented it"
-        ]
+        return (
+            [
+                f"{label}: unknown setup function {call.func_name!r} — "
+                f"the SetupController has no method by that name; the LLM may "
+                f"have invented it"
+            ],
+            call,
+        )
     errs = _check_signature(call, info.get("_sig"), label)
     # `_download_setup` is discouraged by the TASK_GEN prompt; when the LLM
     # emits one anyway, fail fast on fabricated/unreachable URLs by actually
-    # fetching them here, before the example reaches the VM.
+    # fetching them here, before the example reaches the VM. URL errors are
+    # tagged with ``download_url:`` to distinguish them from other setup
+    # failures (notably ``missing_file_setup`` raised by the sequence walker).
     if call.func_name == "_download_setup":
         files_arg = _resolve_list_arg(call, "files", pos_index=0)
         if files_arg is None:
             errs.append(
-                f"{label}: _download_setup must be called with a literal "
-                f"`files=[{{'url': ..., 'path': ...}}, ...]` list so the "
-                f"validator can probe each URL"
+                f"{label}: download_url: _download_setup must be called with "
+                f"a literal `files=[{{'url': ..., 'path': ...}}, ...]` list so "
+                f"the validator can probe each URL"
             )
         else:
             errs.extend(_validate_download_urls(files_arg, label))
-    return errs
+    return errs, call
+
+
+@dataclass
+class _SetupSequenceState:
+    """Accumulated lifecycle context as the validator walks a setup list.
+
+    ``created_paths`` are literal VM paths that an earlier producer setup
+    helper (download / upload) has registered. ``opaque_shell`` records
+    whether any ``_command_setup``-class helper has appeared — once true,
+    subsequent ``missing_file_setup`` checks are skipped because we can't
+    statically know what files the shell actually wrote.
+    """
+    created_paths: set = field(default_factory=set)
+    opaque_shell: bool = False
+
+
+def _files_destinations(call: _ParsedCall) -> List[str]:
+    """Extract destination ``path`` values from a producer's ``files`` list.
+
+    Used for ``_download_setup`` / ``_upload_file_setup`` whose argument is a
+    list of ``{"url"|"local_path": ..., "path": ...}`` dicts. Only literal
+    string paths are returned — opaque entries cannot be tracked statically.
+    """
+    files = _resolve_list_arg(call, "files", pos_index=0)
+    if not files:
+        return []
+    out: List[str] = []
+    for f in files:
+        if isinstance(f, dict):
+            p = f.get("path")
+            if isinstance(p, str) and p.strip():
+                out.append(p)
+    return out
+
+
+def _consumer_path(call: _ParsedCall) -> Optional[str]:
+    """Return the literal ``path`` argument for a consumer setup, if any."""
+    if "path" in call.kwargs:
+        val = call.kwargs["path"]
+    elif call.pos_args:
+        val = call.pos_args[0]
+    else:
+        return None
+    if val is _OPAQUE or not isinstance(val, str) or not val.strip():
+        return None
+    return val
+
+
+def _validate_setup_sequence(
+    entries: List[Any],
+    setup_index: Dict[str, Dict[str, Any]],
+    label_prefix: str,
+    state: Optional[_SetupSequenceState] = None,
+) -> Tuple[List[str], _SetupSequenceState]:
+    """Validate a setup list with cross-entry file-lifecycle awareness.
+
+    Each entry runs through ``_validate_setup_entry`` for the per-call
+    signature/URL checks, and the parsed call is then folded into a running
+    ``_SetupSequenceState`` so ``_open_setup``-style consumers can be checked
+    against the paths earlier producers actually created. The check only
+    fires when ALL of:
+
+    - the consumer's ``path`` argument is a literal string,
+    - no opaque shell helper has appeared earlier in the sequence,
+    - the path is not in ``state.created_paths``.
+
+    Producers register their literal destination paths even when they emit
+    other errors (e.g. an unreachable download URL still announces the path
+    so a downstream `_open_setup` reading that path doesn't double-fault as
+    missing-file).
+    """
+    state = state or _SetupSequenceState()
+    errors: List[str] = []
+    if not isinstance(entries, list):
+        return errors, state
+    for i, entry in enumerate(entries):
+        label = f"{label_prefix}[{i}]"
+        per_entry, call = _validate_setup_entry(entry, setup_index, label)
+        errors.extend(per_entry)
+        if call is None:
+            continue
+
+        if call.func_name in _FILES_LIST_PRODUCERS:
+            for p in _files_destinations(call):
+                state.created_paths.add(p)
+        elif call.func_name in _OPAQUE_SHELL_SETUPS:
+            state.opaque_shell = True
+
+        if call.func_name in _PATH_CONSUMERS:
+            path = _consumer_path(call)
+            if path is None:
+                # Non-literal path — can't check; per-entry signature check
+                # already covered missing/empty values.
+                continue
+            if state.opaque_shell or path in state.created_paths:
+                continue
+            errors.append(
+                f"{label}: missing_file_setup: {call.func_name}(path={path!r}) "
+                f"references a file that no earlier setup entry created. The "
+                f"VM boots from a clean snapshot with no pre-existing app "
+                f"files; add a `_command_setup`/`_upload_file_setup` step "
+                f"that produces {path!r} before opening it."
+            )
+    return errors, state
 
 
 # Builtins that pass the inner expression's score through unchanged. When one
@@ -998,6 +1165,11 @@ def validate_example_scripts(example: Dict[str, Any], catalog: FunctionCatalog) 
     errors: List[str] = []
 
     # --- setup config + evaluator postconfig ---------------------------------
+    # ``config`` runs against a clean snapshot, so the sequence walker enforces
+    # the file-lifecycle rule (every consumer path must be created upstream).
+    # ``postconfig`` runs after the agent's task — the agent may have produced
+    # arbitrary files we can't see statically — so we only run per-entry checks
+    # there and skip the missing_file_setup pass.
     config_entries = example.get("config", [])
     if not isinstance(config_entries, list):
         errors.append(
@@ -1005,8 +1177,10 @@ def validate_example_scripts(example: Dict[str, Any], catalog: FunctionCatalog) 
             f"got {type(config_entries).__name__}"
         )
         config_entries = []
-    for i, entry in enumerate(config_entries):
-        errors.extend(_validate_setup_entry(entry, setup_index, f"config[{i}]"))
+    config_errors, _ = _validate_setup_sequence(
+        config_entries, setup_index, "config",
+    )
+    errors.extend(config_errors)
 
     evaluator = example.get("evaluator", {})
     if not isinstance(evaluator, dict):
@@ -1024,7 +1198,10 @@ def validate_example_scripts(example: Dict[str, Any], catalog: FunctionCatalog) 
         )
         postconfig_entries = []
     for i, entry in enumerate(postconfig_entries):
-        errors.extend(_validate_setup_entry(entry, setup_index, f"postconfig[{i}]"))
+        per_entry, _ = _validate_setup_entry(
+            entry, setup_index, f"postconfig[{i}]",
+        )
+        errors.extend(per_entry)
 
     # --- eval expression -----------------------------------------------------
     eval_str = (evaluator.get("eval") or "").strip()

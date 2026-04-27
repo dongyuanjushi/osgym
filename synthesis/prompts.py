@@ -39,6 +39,22 @@ Avoid:
   locally with `_open_setup`, `_command_setup`, file writes, or in-app \
   interactions — invented or unreachable URLs are rejected by the validator.
 
+## Pre-existing state
+The Ubuntu VM boots from a clean snapshot. There are NO pre-downloaded files, \
+pre-configured documents, projects, downloads folders, or app data of any \
+kind. Every file the task touches must be produced inside `config` BEFORE \
+it is opened or referenced. Typical pattern:
+
+  1. Use `_command_setup(command=[...])` to write the file with `bash -c`, \
+     `tee`, `cat <<EOF`, `printf`, `python -c`, etc. (or `_upload_file_setup` \
+     when a fixture is needed).
+  2. Then use `_open_setup(path=...)` to launch it in the target app.
+
+`_open_setup(path=X)` against a path that no earlier setup entry created \
+will be rejected by the validator with a `missing_file_setup` error. Choose \
+paths under `~` (e.g. `/root/Documents/...`, `/tmp/...`) that you actually \
+populate in step 1.
+
 ## Verifier construction
 The eval expression is a single Python expression that:
 1. Calls getters (`getter(env, config={...})`) to extract VM state.
