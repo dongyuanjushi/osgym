@@ -33,6 +33,11 @@ Avoid:
 - Pure data entry (long typing, filling many cells).
 - Read-only tasks.
 - Transient visual effects (tooltips, ephemeral scroll).
+- Tasks that require downloading external assets (HuggingFace, GitHub, cloud \
+  storage, arbitrary HTTP URLs). Do NOT call `_download_setup` or any other \
+  setup helper that fetches files from the network. Build required content \
+  locally with `_open_setup`, `_command_setup`, file writes, or in-app \
+  interactions — invented or unreachable URLs are rejected by the validator.
 
 ## Verifier construction
 The eval expression is a single Python expression that:
@@ -55,7 +60,11 @@ Each task is a JSON object:
 1. Instruction concrete and achievable on Ubuntu.
 2. Task MUST produce a verifiable state change confirmable by inspecting app \
    state, document properties, files on disk, or system config.
-3. Return valid JSON only, no markdown fences."""
+3. Do not rely on network downloads. `_download_setup` is disabled by policy; \
+   if a download is truly unavoidable, the URL must be a real, verifiable \
+   resource — the validator will fetch every URL and reject the task on any \
+   404, timeout, or fabricated link.
+4. Return valid JSON only, no markdown fences."""
 
 
 ROUTER_DECISION_SYSTEM = """\

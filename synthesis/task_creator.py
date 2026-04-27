@@ -28,6 +28,8 @@ from contextlib import nullcontext
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import requests
+
 from mm_agents.utils.call_llm import call_llm_with_single_response
 from mm_agents.utils.utils import parse_json_response
 
@@ -613,6 +615,106 @@ def _resolve_dict_arg(
     return val
 
 
+def _resolve_list_arg(
+    call: _ParsedCall, kw_name: str, pos_index: int
+) -> Optional[List[Any]]:
+    """Pull the literal list bound to ``kw_name`` (kwarg) or ``pos_index`` (positional)."""
+    if kw_name in call.kwargs:
+        val = call.kwargs[kw_name]
+    elif len(call.pos_args) > pos_index:
+        val = call.pos_args[pos_index]
+    else:
+        return None
+    if val is _OPAQUE or not isinstance(val, list):
+        return None
+    return val
+
+
+# How long to wait when probing a `_download_setup` URL. Each task may carry
+# multiple URLs and the validator runs once per generated example, so the
+# timeout is intentionally short.
+_DOWNLOAD_PROBE_TIMEOUT = 20.0
+# Read at most this many bytes after the response opens — we only need to
+# confirm the body is reachable, not pull the whole asset.
+_DOWNLOAD_PROBE_BYTES = 4096
+
+
+def _validate_download_urls(files: List[Any], label: str) -> List[str]:
+    """Probe every URL that ``_download_setup`` would fetch.
+
+    The TASK_GEN prompt asks the LLM not to use `_download_setup`; this is the
+    enforcement when the model emits one anyway. Each entry in ``files`` is
+    expected to be a ``{"url": ..., "path": ...}`` dict (matching the
+    SetupController signature). For every literal-string URL we issue a
+    streaming GET and read a small chunk so a fabricated or 404 link surfaces
+    as a validation error before the example reaches the VM stage.
+
+    Non-literal entries (resolved to ``_OPAQUE`` by the AST parser) are left
+    alone — we can't tell statically what URL would be passed.
+    """
+    errors: List[str] = []
+    for i, f in enumerate(files):
+        if f is _OPAQUE:
+            errors.append(
+                f"{label}: _download_setup files[{i}] is not a literal dict — "
+                f"the synthesis pipeline cannot statically verify the URL"
+            )
+            continue
+        if not isinstance(f, dict):
+            errors.append(
+                f"{label}: _download_setup files[{i}] is not a dict "
+                f"(got {type(f).__name__}); expected {{'url': ..., 'path': ...}}"
+            )
+            continue
+        url = f.get("url")
+        path = f.get("path")
+        if not isinstance(url, str) or not url.strip():
+            errors.append(
+                f"{label}: _download_setup files[{i}] has missing or empty 'url'"
+            )
+            continue
+        if not isinstance(path, str) or not path.strip():
+            errors.append(
+                f"{label}: _download_setup files[{i}] has missing or empty 'path'"
+            )
+            # still probe the URL — both fields are required, but the URL probe
+            # is the more interesting failure to surface.
+        if not url.lower().startswith(("http://", "https://")):
+            errors.append(
+                f"{label}: _download_setup url {url!r} is not http(s) — only "
+                f"web URLs are probeable; pick a real download endpoint"
+            )
+            continue
+        try:
+            resp = requests.get(
+                url,
+                stream=True,
+                timeout=_DOWNLOAD_PROBE_TIMEOUT,
+                allow_redirects=True,
+            )
+            try:
+                resp.raise_for_status()
+                # Read a single chunk so the body actually has to start
+                # streaming — catches presigned links that 200 on HEAD but
+                # 403 mid-stream and HTML error pages served as 200.
+                chunk = next(resp.iter_content(chunk_size=_DOWNLOAD_PROBE_BYTES), b"")
+                if not chunk:
+                    errors.append(
+                        f"{label}: _download_setup url {url!r} returned an "
+                        f"empty body — the URL likely no longer exists"
+                    )
+            finally:
+                resp.close()
+        except requests.RequestException as e:
+            errors.append(
+                f"{label}: _download_setup url {url!r} is not reachable "
+                f"({type(e).__name__}: {e}) — the URL is fabricated or no "
+                f"longer hosted; remove the download step or pick an existing "
+                f"resource"
+            )
+    return errors
+
+
 def _resolve_rules_dict_for_metric(
     metric_node: ast.Call, parsed: _ParsedCall
 ) -> Optional[Dict[Any, Any]]:
@@ -744,7 +846,21 @@ def _validate_setup_entry(
             f"the SetupController has no method by that name; the LLM may "
             f"have invented it"
         ]
-    return _check_signature(call, info.get("_sig"), label)
+    errs = _check_signature(call, info.get("_sig"), label)
+    # `_download_setup` is discouraged by the TASK_GEN prompt; when the LLM
+    # emits one anyway, fail fast on fabricated/unreachable URLs by actually
+    # fetching them here, before the example reaches the VM.
+    if call.func_name == "_download_setup":
+        files_arg = _resolve_list_arg(call, "files", pos_index=0)
+        if files_arg is None:
+            errs.append(
+                f"{label}: _download_setup must be called with a literal "
+                f"`files=[{{'url': ..., 'path': ...}}, ...]` list so the "
+                f"validator can probe each URL"
+            )
+        else:
+            errs.extend(_validate_download_urls(files_arg, label))
+    return errs
 
 
 # Builtins that pass the inner expression's score through unchanged. When one
@@ -1166,7 +1282,7 @@ def _synthesize_domain(
             f"(progress: {existing_valid + len(session_valid)}/{total_examples})"
         )
         
-        breakpoint()
+        # breakpoint()
 
         if len(batch_valid) == 0:
             empty_streak += 1
@@ -1233,6 +1349,7 @@ def _run_synthesize_parallel(
     worker.
     """
     synthesize_workers = max(1, min(getattr(args, "synthesize_workers", 1), len(targets)))
+    # breakpoint()
     logger.info(
         f"Synthesis (parallel): {len(targets)} domain(s) across "
         f"{synthesize_workers} worker thread(s) "
@@ -1307,6 +1424,7 @@ def run_synthesize(
     max_empty_batches = max(1, args.max_empty_batches)
 
     synthesize_mode = getattr(args, "synthesize_mode", "sequential")
+    # breakpoint()
     if synthesize_mode == "parallel":
         all_examples = _run_synthesize_parallel(
             args, memory, vector_store, on_batch_complete, targets,
