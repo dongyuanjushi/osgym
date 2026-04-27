@@ -1232,17 +1232,17 @@ def _run_synthesize_parallel(
     bookkeeping is serialized via a single ``write_lock`` shared by every
     worker.
     """
-    num_workers = max(1, min(getattr(args, "synthesize_workers", 1), len(targets)))
+    synthesize_workers = max(1, min(getattr(args, "synthesize_workers", 1), len(targets)))
     logger.info(
         f"Synthesis (parallel): {len(targets)} domain(s) across "
-        f"{num_workers} worker thread(s) "
+        f"{synthesize_workers} worker thread(s) "
         f"(target={total_examples}, batch_size={batch_size})"
     )
 
     write_lock = threading.Lock()
     all_examples: List[Dict[str, Any]] = []
 
-    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+    with ThreadPoolExecutor(max_workers=synthesize_workers) as executor:
         future_to_domain = {
             executor.submit(
                 _synthesize_domain,

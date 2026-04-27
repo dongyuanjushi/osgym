@@ -675,10 +675,10 @@ def _run_verify_parallel(
     """
     global _processes
 
-    total_workers = getattr(args, "verification_workers", 1)
+    verification_workers = getattr(args, "verification_workers", 1)
     logger.info(
         f"Verification (parallel): {len(examples)} examples across "
-        f"{total_workers} workers (max_steps={max_steps}, screen_size={screen_size})"
+        f"{verification_workers} workers (max_steps={max_steps}, screen_size={screen_size})"
     )
 
     manager = Manager()
@@ -689,7 +689,7 @@ def _run_verify_parallel(
         task_queue.put(ex)
 
     _processes = []
-    for pidx in range(total_workers):
+    for pidx in range(verification_workers):
         p = Process(
             target=worker,
             args=(task_queue, args, shared_results, max_steps, screen_size),
