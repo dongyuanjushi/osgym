@@ -113,6 +113,12 @@ DOMAIN_METRIC_MODULES: Dict[str, Tuple[str, ...]] = {
 # Sentinel domain that disables filtering (full catalog rendered for the LLM).
 _FULL_CATALOG_DOMAIN = "multi_apps"
 
+# Maximum LLM attempts per ``generate_task_examples`` call. The endpoint can
+# blip (transport errors, malformed JSON, lists of strings instead of dicts),
+# and a single batch failure shouldn't stall the whole synthesis loop — the
+# outer ``empty_streak`` already kicks in if every attempt yields nothing.
+_LLM_GENERATION_RETRIES = 3
+
 
 def _module_leaf(obj: Any) -> str:
     """Return the last dotted component of ``obj.__module__``.
@@ -205,9 +211,13 @@ def _stamp_synthesized_examples(
     The function mutates ``examples`` in place and returns ``None``; it is
     called exactly once per batch (right after the LLM response is parsed)
     so downstream code can rely on every accepted example having a unique,
-    canonical ``id``.
+    canonical ``id``. Non-dict entries are skipped defensively so a malformed
+    item from upstream cannot crash the whole batch — callers should already
+    have filtered to dicts before reaching here.
     """
     for ex in examples:
+        if not isinstance(ex, dict):
+            continue
         ex["id"] = str(uuid.uuid4())
         ex["source"] = "synthetic"
         ex["_domain"] = domain
@@ -460,36 +470,111 @@ def generate_task_examples(
         f"'{domain_info.name}' ..."
     )
 
-    raw = call_llm_with_single_response(
-        messages=messages, llm_config=llm_config,
-        max_tokens=8000, temperature=0.7,
-    )
+    # Retry loop: an LLM hiccup (transport error, malformed JSON, a list of
+    # bare strings instead of task dicts) shouldn't sink the whole batch.
+    # We try up to ``_LLM_GENERATION_RETRIES`` times and return the first
+    # attempt that yields at least one well-formed dict; any non-dict entries
+    # in an otherwise valid response are dropped with a warning.
+    last_failure = ""
+    for attempt in range(1, _LLM_GENERATION_RETRIES + 1):
+        try:
+            raw = call_llm_with_single_response(
+                messages=messages, llm_config=llm_config,
+                max_tokens=8000, temperature=0.7,
+            )
+        except Exception as e:
+            last_failure = f"LLM call raised {type(e).__name__}: {e}"
+            logger.warning(
+                f"Attempt {attempt}/{_LLM_GENERATION_RETRIES} for "
+                f"'{domain_info.name}' failed: {last_failure}"
+            )
+            continue
 
-    logger.info(f"LLM response: {len(raw)} chars")
+        if not isinstance(raw, str) or not raw.strip():
+            last_failure = "LLM returned empty response"
+            logger.warning(
+                f"Attempt {attempt}/{_LLM_GENERATION_RETRIES} for "
+                f"'{domain_info.name}': {last_failure}"
+            )
+            continue
+        logger.info(f"LLM response: {len(raw)} chars")
 
-    parsed = parse_json_response(raw)
-    if parsed is None:
-        logger.error("Failed to parse LLM response as JSON")
-        return []
-    if isinstance(parsed, dict):
-        parsed = [parsed]
+        try:
+            parsed = parse_json_response(raw)
+        except Exception as e:
+            last_failure = f"JSON parser raised {type(e).__name__}: {e}"
+            logger.warning(
+                f"Attempt {attempt}/{_LLM_GENERATION_RETRIES} for "
+                f"'{domain_info.name}': {last_failure}"
+            )
+            continue
 
-    # Stamp identity fields (id / source / _domain) once, here. The LLM is
-    # not asked to emit them, and any model-supplied id is overwritten so
-    # reference-example UUID copying can't collide with the manifest.
-    _stamp_synthesized_examples(parsed, domain_info.name)
+        if parsed is None:
+            last_failure = "LLM response did not contain parseable JSON"
+            logger.warning(
+                f"Attempt {attempt}/{_LLM_GENERATION_RETRIES} for "
+                f"'{domain_info.name}': {last_failure}"
+            )
+            continue
+        if isinstance(parsed, dict):
+            parsed = [parsed]
+        if not isinstance(parsed, list):
+            last_failure = (
+                f"LLM response is {type(parsed).__name__}, not a JSON array"
+            )
+            logger.warning(
+                f"Attempt {attempt}/{_LLM_GENERATION_RETRIES} for "
+                f"'{domain_info.name}': {last_failure}"
+            )
+            continue
 
-    missing_eval = sum(
-        1 for ex in parsed if not (ex.get("evaluator") or {}).get("eval")
-    )
-    if missing_eval:
-        logger.warning(
-            f"{missing_eval}/{len(parsed)} generated example(s) lack an "
-            f"`evaluator.eval` field — they will be rejected by static "
-            f"validation. Check the system prompt if this recurs."
+        valid = [ex for ex in parsed if isinstance(ex, dict)]
+        if len(valid) < len(parsed):
+            logger.warning(
+                f"Dropped {len(parsed) - len(valid)}/{len(parsed)} non-dict "
+                f"entries from LLM response for '{domain_info.name}'"
+            )
+        if not valid:
+            last_failure = "LLM response had no dict task objects"
+            logger.warning(
+                f"Attempt {attempt}/{_LLM_GENERATION_RETRIES} for "
+                f"'{domain_info.name}': {last_failure}"
+            )
+            continue
+
+        # Stamp identity fields (id / source / _domain) once, here. The LLM
+        # is not asked to emit them, and any model-supplied id is overwritten
+        # so reference-example UUID copying can't collide with the manifest.
+        try:
+            _stamp_synthesized_examples(valid, domain_info.name)
+        except Exception as e:
+            last_failure = f"identity stamping failed: {type(e).__name__}: {e}"
+            logger.warning(
+                f"Attempt {attempt}/{_LLM_GENERATION_RETRIES} for "
+                f"'{domain_info.name}': {last_failure}"
+            )
+            continue
+
+        missing_eval = sum(
+            1 for ex in valid if not (ex.get("evaluator") or {}).get("eval")
         )
-    logger.info(f"Generated {len(parsed)} example(s)")
-    return parsed
+        if missing_eval:
+            logger.warning(
+                f"{missing_eval}/{len(valid)} generated example(s) lack an "
+                f"`evaluator.eval` field — they will be rejected by static "
+                f"validation. Check the system prompt if this recurs."
+            )
+        logger.info(
+            f"Generated {len(valid)} example(s) for '{domain_info.name}' "
+            f"on attempt {attempt}/{_LLM_GENERATION_RETRIES}"
+        )
+        return valid
+
+    logger.error(
+        f"Giving up on '{domain_info.name}' after "
+        f"{_LLM_GENERATION_RETRIES} attempts; last failure: {last_failure}"
+    )
+    return []
 
 
 # ═══════════════════════════════════════════════════════════════════════════
