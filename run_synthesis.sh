@@ -18,21 +18,28 @@ DOMAINS=(
 TOTAL_EXAMPLES=500     # target total validated tasks per domain (resumable)
 BATCH_SIZE=10          # tasks requested per LLM call; prior-batch instructions are surfaced to the LLM to avoid repeats
 MAX_EMPTY_BATCHES=3    # give up on a domain after this many consecutive no-valid-yield batches
-MAX_REF_EXAMPLES=10
+MAX_REF_EXAMPLES=2
 
 # MODEL="us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 # PROVIDER="bedrock"
 # ENDPOINT="http://localhost:7778"
 
-MODEL="Qwen/Qwen3.5-9B"
+MODEL="Qwen/Qwen3-VL-8B-Instruct"
 PROVIDER="sglang"
 ENDPOINT="http://207.211.167.191:9000/v1"
 
+# Per-model output/KB layout. Synthesized examples land in
+# ${OUTPUT_ROOT}/${MODEL_TAG}/, the vector-DB lands in ${OUTPUT_ROOT}/kb/${MODEL_TAG}/,
+# so multiple model variants can coexist under a single root without colliding.
+# Override either with the CLI flags --output-dir / --vector-db-path.
+OUTPUT_ROOT="synthetic_evaluation_examples"
+MODEL_TAG="qwen3-vl-8b"
+
 SERVER_URL="http://localhost:20000"
-synthesize_workers=2     # threads for parallel synthesis (LLM calls; I/O-bound)
+synthesize_workers=5     # threads for parallel synthesis (LLM calls; I/O-bound)
 verification_workers=1   # processes for parallel verification (one VM per worker)
 MAX_STEPS=15
-OUTPUT_DIR="synthetic_evaluation_examples"
+OUTPUT_DIR="${OUTPUT_ROOT}/${MODEL_TAG}"
 SYNTHESIZE_MODE="parallel"     # "sequential" = main thread; "parallel" = thread-pool over domains
 VERIFICATION_MODE="sequential"   # "sequential" = main process (debugger-friendly); "parallel" = multi-process workers
 
@@ -44,7 +51,7 @@ ENABLE_DEDUP=1                        # set to 1 to turn on
 EMBEDDING_ENDPOINT="http://ec2-44-249-196-60.us-west-2.compute.amazonaws.com:30000/v1"                 # e.g. http://localhost:9001
 EMBEDDING_MODEL="Qwen/Qwen3-Embedding-0.6B"                    # e.g. Qwen/Qwen3-Embedding-0.6B
 DEDUP_THRESHOLD=0.85                   # cosine similarity cutoff (stricter dedup)
-VECTOR_DB_PATH="synthesis/kb"                     # defaults to ${OUTPUT_DIR}/vector_db when empty
+VECTOR_DB_PATH="${OUTPUT_ROOT}/kb/${MODEL_TAG}"   # leave empty to fall back to ${OUTPUT_DIR}/vector_db
 
 dedup_args=()
 if [[ "${ENABLE_DEDUP}" == "1" ]]; then
