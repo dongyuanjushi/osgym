@@ -1,0 +1,23 @@
+{
+  "id": "f358e057-8dfc-4a46-b11e-b34e40a1c0a6",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Center-align the first paragraph of the document (horizontally centered).",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_writer_file_setup(path='/home/user/Desktop/center_demo.docx', paragraphs=['Title goes here', 'Body paragraph one.'])",
+    "_open_setup(path='/home/user/Desktop/center_demo.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='center_demo.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "is_first_line_centered(get_vm_file(env, config={'path': '/home/user/Desktop/center_demo.docx', 'dest': 'center_demo.docx'}))"
+  },
+  "trajectory": "trajectories/"
+}

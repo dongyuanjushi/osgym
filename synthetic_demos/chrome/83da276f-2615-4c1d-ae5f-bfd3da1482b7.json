@@ -1,0 +1,18 @@
+{
+  "id": "83da276f-2615-4c1d-ae5f-bfd3da1482b7",
+  "snapshot": "chrome",
+  "instruction": "Clear Chrome's browsing history so no entry whose domain contains 'example.com' remains.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_history_deleted(get_history(env, config={'dest': 'history.sqlite'}), get_rule(env, config={'rules': {'type': 'keywords', 'keywords': ['example.com']}}))"
+  },
+  "trajectory": "trajectories/"
+}

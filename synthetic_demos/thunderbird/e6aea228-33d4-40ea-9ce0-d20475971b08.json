@@ -1,0 +1,18 @@
+{
+  "id": "e6aea228-33d4-40ea-9ce0-d20475971b08",
+  "snapshot": "thunderbird",
+  "instruction": "Set the default size for compose-window text in Thunderbird to 16 pixels.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['/usr/bin/thunderbird'])",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_thunderbird_prefs(get_vm_file(env, config={'path': '/home/user/.thunderbird/t5q2a5hp.default-release/prefs.js', 'dest': 'thunder-prefs.js'}), get_rule(env, config={'rules': {'expect': {'mail.compose.default_font_size': {'method': 'eq', 'ref': 16}}}}))"
+  },
+  "trajectory": "trajectories/"
+}

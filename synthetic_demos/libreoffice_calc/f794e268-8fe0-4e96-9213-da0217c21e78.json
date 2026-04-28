@@ -1,0 +1,21 @@
+{
+  "id": "f794e268-8fe0-4e96-9213-da0217c21e78",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Export the spreadsheet to a single-page PDF saved at /tmp/calc_export.pdf.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_calc_file_setup(path='/home/user/Desktop/pdf_demo.xlsx', data=[['Q1', 'Q2'], [100, 200]])",
+    "_open_setup(path='/home/user/Desktop/pdf_demo.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='pdf_demo.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_pdf_pages(get_vm_file(env, config={'path': '/tmp/calc_export.pdf', 'dest': 'calc_export.pdf'}), get_rule(env, config={'rules': {'relation': 'eq', 'ref_value': 1}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "bc777cb4-3b5c-4747-9403-12970866ad38",
+  "snapshot": "multi_apps",
+  "instruction": "Set the desktop wallpaper to /home/user/Desktop/wallpaper_demo.png so gsettings reports it as the active picture-uri.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_gimp_image_setup(path='/home/user/Desktop/wallpaper_demo.png', width=1920, height=1080, color=[20, 40, 80])",
+    "_open_setup(path='/home/user/Desktop/wallpaper_demo.png')"
+  ],
+  "related_apps": [
+    "multi_apps"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "exact_match(get_vm_command_line(env, config={'command': 'gsettings get org.gnome.desktop.background picture-uri', 'shell': True}), get_rule(env, config={'rules': {'expected': \"'file:///home/user/Desktop/wallpaper_demo.png'\"}}))"
+  },
+  "trajectory": "trajectories/"
+}

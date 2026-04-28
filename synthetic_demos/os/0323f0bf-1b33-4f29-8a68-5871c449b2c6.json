@@ -1,0 +1,15 @@
+{
+  "id": "0323f0bf-1b33-4f29-8a68-5871c449b2c6",
+  "snapshot": "os",
+  "instruction": "Set the desktop wallpaper to /usr/share/backgrounds/warty-final-ubuntu.png.",
+  "source": "hand-curated demo",
+  "config": [],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "exact_match(get_vm_command_line(env, config={'command': 'gsettings get org.gnome.desktop.background picture-uri', 'shell': True}), get_rule(env, config={'rules': {'expected': \"'file:///usr/share/backgrounds/warty-final-ubuntu.png'\"}}))"
+  },
+  "trajectory": "trajectories/"
+}

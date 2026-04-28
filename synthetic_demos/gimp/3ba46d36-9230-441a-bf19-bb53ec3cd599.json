@@ -1,0 +1,21 @@
+{
+  "id": "3ba46d36-9230-441a-bf19-bb53ec3cd599",
+  "snapshot": "gimp",
+  "instruction": "Re-export the image as JPEG with quality reduced enough that the resulting file at /tmp/compressed.jpg is under 50,000 bytes.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_gimp_image_setup(path='/home/user/Desktop/source_demo.png', width=800, height=600, color=[200, 100, 50])",
+    "_open_setup(path='/home/user/Desktop/source_demo.png')"
+  ],
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='GNU Image Manipulation Program', strict=False)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_image_file_size(get_vm_file(env, config={'path': '/tmp/compressed.jpg', 'dest': 'compressed.jpg'}), get_rule(env, config={'rules': {'max_size': 50000}}))"
+  },
+  "trajectory": "trajectories/"
+}

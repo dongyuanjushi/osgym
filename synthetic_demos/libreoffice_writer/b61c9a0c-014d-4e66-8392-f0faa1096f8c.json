@@ -1,0 +1,23 @@
+{
+  "id": "b61c9a0c-014d-4e66-8392-f0faa1096f8c",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Change the document's default font to Arial and save the file.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_writer_file_setup(path='/home/user/Desktop/font_demo.docx', paragraphs=['First paragraph.', 'Second paragraph.'])",
+    "_open_setup(path='/home/user/Desktop/font_demo.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='font_demo.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "find_default_font(get_vm_file(env, config={'path': '/home/user/Desktop/font_demo.docx', 'dest': 'font_demo.docx'}), get_rule(env, config={'rules': {'font_name': 'Arial'}}))"
+  },
+  "trajectory": "trajectories/"
+}

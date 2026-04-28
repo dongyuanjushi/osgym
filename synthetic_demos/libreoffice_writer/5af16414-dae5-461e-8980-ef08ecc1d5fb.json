@@ -1,0 +1,23 @@
+{
+  "id": "5af16414-dae5-461e-8980-ef08ecc1d5fb",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Apply the same line spacing to every paragraph so the spacing is uniform throughout the document.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_writer_file_setup(path='/home/user/Desktop/spacing_demo.docx', paragraphs=['Paragraph one.', 'Paragraph two.', 'Paragraph three.'])",
+    "_open_setup(path='/home/user/Desktop/spacing_demo.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='spacing_demo.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "evaluate_spacing(get_vm_file(env, config={'path': '/home/user/Desktop/spacing_demo.docx', 'dest': 'spacing_demo.docx'}))"
+  },
+  "trajectory": "trajectories/"
+}

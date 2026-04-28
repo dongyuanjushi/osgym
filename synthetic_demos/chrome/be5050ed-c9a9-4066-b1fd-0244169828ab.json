@@ -1,0 +1,18 @@
+{
+  "id": "be5050ed-c9a9-4066-b1fd-0244169828ab",
+  "snapshot": "chrome",
+  "instruction": "Enable Chrome's 'Send a Do Not Track request with your browsing traffic' privacy setting.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "exact_match(get_enable_do_not_track(env, config={}), get_rule(env, config={'rules': {'expected': 'true'}}))"
+  },
+  "trajectory": "trajectories/"
+}

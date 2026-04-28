@@ -1,0 +1,21 @@
+{
+  "id": "5c12257b-5f37-497b-aea8-be3470b4991a",
+  "snapshot": "gimp",
+  "instruction": "Convert the image's color mode to grayscale and overwrite the original PNG file.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_gimp_image_setup(path='/home/user/Desktop/grayscale_demo.png', width=200, height=200, color=[120, 60, 30])",
+    "_open_setup(path='/home/user/Desktop/grayscale_demo.png')"
+  ],
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='GNU Image Manipulation Program', strict=False)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "file_contains(get_vm_command_line(env, config={'command': 'file -b /home/user/Desktop/grayscale_demo.png', 'shell': True}), get_rule(env, config={'rules': {'expected': ['gray']}}))"
+  },
+  "trajectory": "trajectories/"
+}

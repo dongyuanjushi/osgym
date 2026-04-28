@@ -1,0 +1,15 @@
+{
+  "id": "f5e17b9c-043c-4d89-a4d6-77fdceef7375",
+  "snapshot": "os",
+  "instruction": "Set the system time zone to UTC so timedatectl reports UTC as the active zone.",
+  "source": "hand-curated demo",
+  "config": [],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "is_utc_0(get_vm_command_line(env, config={'command': 'timedatectl', 'shell': True}))"
+  },
+  "trajectory": "trajectories/"
+}

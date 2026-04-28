@@ -1,0 +1,23 @@
+{
+  "id": "2ebee896-6ce4-40e1-bed8-35ca6f74965e",
+  "snapshot": "libreoffice_impress",
+  "instruction": "Switch the slide orientation to portrait for the entire presentation and save the file.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_impress_file_setup(path='/home/user/Desktop/portrait_demo.pptx', slides=[{'title': 'Cover'}, {'title': 'Content'}])",
+    "_open_setup(path='/home/user/Desktop/portrait_demo.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_impress"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='portrait_demo.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "check_slide_orientation_Portrait(get_vm_file(env, config={'path': '/home/user/Desktop/portrait_demo.pptx', 'dest': 'portrait_demo.pptx'}))"
+  },
+  "trajectory": "trajectories/"
+}

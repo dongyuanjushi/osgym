@@ -1,0 +1,19 @@
+{
+  "id": "bff497d2-3aa9-4a50-a393-94ca29d63c9a",
+  "snapshot": "multi_apps",
+  "instruction": "Open /home/user/Desktop/snippet.txt in VS Code, copy its first line ('hello world') to the clipboard.",
+  "source": "hand-curated demo",
+  "config": [
+    "_command_setup(command=['bash', '-c', 'echo hello world > /home/user/Desktop/snippet.txt'])",
+    "_launch_setup(command=['code', '/home/user/Desktop/snippet.txt'])",
+    "_activate_window_setup(window_name='Visual Studio Code')"
+  ],
+  "related_apps": [
+    "multi_apps"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "is_in_vm_clickboard(get_rule(env, config={'rules': {'expected': 'hello world'}}), get_vm_command_line(env, config={'command': 'xclip -selection clipboard -o', 'shell': True}))"
+  },
+  "trajectory": "trajectories/"
+}

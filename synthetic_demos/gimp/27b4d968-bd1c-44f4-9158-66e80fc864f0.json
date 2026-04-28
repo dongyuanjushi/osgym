@@ -1,0 +1,21 @@
+{
+  "id": "27b4d968-bd1c-44f4-9158-66e80fc864f0",
+  "snapshot": "gimp",
+  "instruction": "Crop the image so the bounding box of the visible (non-transparent) content is exactly 150 pixels wide by 150 pixels tall, then save it.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_gimp_image_setup(path='/home/user/Desktop/transparent_demo.png', width=400, height=400, color=[0, 0, 0, 0], mode='RGBA')",
+    "_open_setup(path='/home/user/Desktop/transparent_demo.png')"
+  ],
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='GNU Image Manipulation Program', strict=False)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_image_size(get_vm_file(env, config={'path': '/home/user/Desktop/transparent_demo.png', 'dest': 'transparent_demo.png'}), get_rule(env, config={'rules': {'width': 150, 'height': 150, 'ignore_transparent': True}}))"
+  },
+  "trajectory": "trajectories/"
+}

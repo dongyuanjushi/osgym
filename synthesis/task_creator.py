@@ -52,6 +52,33 @@ EXAMPLES_DIR = os.path.join(
     "examples",
 )
 
+# Curated demo tasks that the LLM reads as ground-truth references in the
+# TASK_GEN prompt. Each ``<domain>/`` subdirectory holds a small set of
+# hand-vetted example tasks (typically five) that statically pass validation
+# and exercise the most common setup helpers / getters / metrics for that
+# domain. Used as the prompt-context source instead of the larger curated
+# OSWorld example library so the prompt stays focused.
+DEMOS_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    os.pardir,
+    "synthetic_demos",
+)
+
+
+def _load_domain_demos(domain: str) -> List[Dict[str, Any]]:
+    """Return the demo tasks for ``domain`` (empty list when none exist)."""
+    domain_dir = os.path.join(DEMOS_DIR, domain)
+    if not os.path.isdir(domain_dir):
+        return []
+    out: List[Dict[str, Any]] = []
+    for fp in sorted(glob.glob(os.path.join(domain_dir, "*.json"))):
+        try:
+            with open(fp, "r") as f:
+                out.append(json.load(f))
+        except Exception as e:  # pragma: no cover — corrupt demo file
+            logger.warning(f"Skipping malformed demo {fp}: {e}")
+    return out
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Domain ↔ getter / metric module maps
@@ -414,7 +441,16 @@ def generate_task_examples(
     parallel mode so the read happens atomically with respect to concurrent
     ``memory.record`` calls); otherwise it is derived from ``memory`` here.
     """
-    ref = json.dumps(domain_info.examples[:5], indent=2)
+    # Curated demos are the LLM's primary source of correct call patterns —
+    # they showcase how to pair file-creation setup with `_open_setup`, how
+    # to populate `get_vm_file(env, config={'path':..., 'dest':...})` with
+    # both required keys, and how to emit rules dicts that match the metric's
+    # schema. Fall back to a slice of the legacy curated OSWorld examples if
+    # no demo file exists for the domain so the prompt isn't empty.
+    demos = _load_domain_demos(domain_info.name)
+    if not demos:
+        demos = domain_info.examples[:5]
+    ref = json.dumps(demos[:5], indent=2)
 
     # Build memory context (empty string if no prior experience). If the
     # caller supplied ``memory_block`` directly, use it verbatim — that path
@@ -447,14 +483,13 @@ def generate_task_examples(
 
     user = (
         f"Domain: {domain_info.name}\n"
-        f"Existing examples: {len(domain_info.example_files)}\n\n"
         f"## Complexity budget\n"
         f"Each task must be completable by a GUI agent in at most **{max_steps} steps** "
         f"(each step = one mouse click, keystroke, or typed string). "
         f"Keep tasks focused — each should explore one aspect of the software and "
         f"produce a clear, verifiable outcome.\n\n"
         f"{memory_block}"
-        f"## Reference examples (each shows a complete task with its evaluator)\n{ref}\n\n"
+        f"## Reference examples (each shows a complete task with its evaluator — copy these patterns)\n{ref}\n\n"
         f"## Setup functions\n{_fmt_funcs(catalog.setup_functions)}\n\n"
         f"## Getter functions\n{_fmt_funcs(domain_getters)}\n\n"
         f"## Metric functions\n{_fmt_funcs(domain_metrics)}\n\n"
@@ -469,6 +504,7 @@ def generate_task_examples(
         f"prompt.\n"
         f"Return a JSON array of task objects (no markdown fences)."
     )
+    breakpoint()
     messages = [
         {"role": "system", "content": TASK_GEN_SYSTEM},
         {"role": "user", "content": user},
@@ -855,6 +891,18 @@ _OPAQUE_SHELL_SETUPS: frozenset = frozenset({
 # Helpers whose first ``path`` argument MUST already exist on the VM.
 _PATH_CONSUMERS: Tuple[str, ...] = ("_open_setup", "_change_wallpaper_setup")
 
+# Helpers that take a single literal ``path`` argument and create that file
+# on the VM. The validator registers the path so a downstream ``_open_setup``
+# referencing the same path won't trigger ``missing_file_setup``. Keep this
+# in sync with new ``_create_*_setup`` helpers in
+# ``desktop_env/controllers/setup.py``.
+_PATH_PRODUCERS: Tuple[str, ...] = (
+    "_create_calc_file_setup",
+    "_create_writer_file_setup",
+    "_create_impress_file_setup",
+    "_create_gimp_image_setup",
+)
+
 
 def _resolve_rules_dict_for_metric(
     metric_node: ast.Call, parsed: _ParsedCall
@@ -1103,6 +1151,10 @@ def _validate_setup_sequence(
         if call.func_name in _FILES_LIST_PRODUCERS:
             for p in _files_destinations(call):
                 state.created_paths.add(p)
+        elif call.func_name in _PATH_PRODUCERS:
+            p = _consumer_path(call)
+            if p is not None:
+                state.created_paths.add(p)
         elif call.func_name in _OPAQUE_SHELL_SETUPS:
             state.opaque_shell = True
 
@@ -1118,8 +1170,12 @@ def _validate_setup_sequence(
                 f"{label}: missing_file_setup: {call.func_name}(path={path!r}) "
                 f"references a file that no earlier setup entry created. The "
                 f"VM boots from a clean snapshot with no pre-existing app "
-                f"files; add a `_command_setup`/`_upload_file_setup` step "
-                f"that produces {path!r} before opening it."
+                f"files; add a producer step that creates {path!r} first — "
+                f"for office/image fixtures prefer the domain-specific "
+                f"`_create_calc_file_setup` / `_create_writer_file_setup` / "
+                f"`_create_impress_file_setup` / `_create_gimp_image_setup` "
+                f"helpers, otherwise use `_command_setup` (heredoc/printf) or "
+                f"`_upload_file_setup`."
             )
     return errors, state
 

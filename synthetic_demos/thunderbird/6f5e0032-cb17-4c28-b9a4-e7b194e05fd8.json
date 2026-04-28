@@ -1,0 +1,18 @@
+{
+  "id": "6f5e0032-cb17-4c28-b9a4-e7b194e05fd8",
+  "snapshot": "thunderbird",
+  "instruction": "Switch Thunderbird to a dark theme so the active theme id contains the substring 'dark'.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['/usr/bin/thunderbird'])",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_thunderbird_prefs(get_vm_file(env, config={'path': '/home/user/.thunderbird/t5q2a5hp.default-release/prefs.js', 'dest': 'thunder-prefs.js'}), get_rule(env, config={'rules': {'expect': {'extensions.activeThemeID': {'method': 're', 'ref': 'dark'}}}}))"
+  },
+  "trajectory": "trajectories/"
+}

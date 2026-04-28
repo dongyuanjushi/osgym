@@ -1,0 +1,15 @@
+{
+  "id": "469a7a87-b567-4609-b8bc-cff7cd3da46a",
+  "snapshot": "os",
+  "instruction": "Pin Files (Nautilus) and Calculator to the GNOME dock so the favorite-apps list is exactly ['org.gnome.Nautilus.desktop', 'org.gnome.Calculator.desktop'].",
+  "source": "hand-curated demo",
+  "config": [],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_gnome_favorite_apps(get_vm_command_line(env, config={'command': 'gsettings get org.gnome.shell favorite-apps', 'shell': True}), get_rule(env, config={'rules': {'expected': ['org.gnome.Nautilus.desktop', 'org.gnome.Calculator.desktop']}}))"
+  },
+  "trajectory": "trajectories/"
+}

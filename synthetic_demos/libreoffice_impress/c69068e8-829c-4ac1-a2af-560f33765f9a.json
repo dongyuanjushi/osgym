@@ -1,0 +1,21 @@
+{
+  "id": "c69068e8-829c-4ac1-a2af-560f33765f9a",
+  "snapshot": "libreoffice_impress",
+  "instruction": "Export the presentation to a 2-page PDF saved at /tmp/impress_export.pdf (one PDF page per slide).",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_impress_file_setup(path='/home/user/Desktop/pdf_demo.pptx', slides=[{'title': 'Slide One'}, {'title': 'Slide Two'}])",
+    "_open_setup(path='/home/user/Desktop/pdf_demo.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_impress"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='pdf_demo.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_pdf_pages(get_vm_file(env, config={'path': '/tmp/impress_export.pdf', 'dest': 'impress_export.pdf'}), get_rule(env, config={'rules': {'relation': 'eq', 'ref_value': 2}}))"
+  },
+  "trajectory": "trajectories/"
+}

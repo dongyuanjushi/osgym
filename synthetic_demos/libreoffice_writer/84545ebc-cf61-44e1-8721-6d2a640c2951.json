@@ -1,0 +1,23 @@
+{
+  "id": "84545ebc-cf61-44e1-8721-6d2a640c2951",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Add page numbers in the document footer so every page shows its number.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_writer_file_setup(path='/home/user/Desktop/footer_demo.docx', paragraphs=['Cover page.', 'Body content goes here.'])",
+    "_open_setup(path='/home/user/Desktop/footer_demo.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='footer_demo.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "has_page_numbers_in_footers(get_vm_file(env, config={'path': '/home/user/Desktop/footer_demo.docx', 'dest': 'footer_demo.docx'}))"
+  },
+  "trajectory": "trajectories/"
+}

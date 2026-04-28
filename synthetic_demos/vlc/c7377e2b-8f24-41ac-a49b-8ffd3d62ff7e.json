@@ -1,0 +1,18 @@
+{
+  "id": "c7377e2b-8f24-41ac-a49b-8ffd3d62ff7e",
+  "snapshot": "vlc",
+  "instruction": "Bind a system-wide hotkey for play/pause in VLC so global-key-play-pause is set.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command='VLC_VERBOSE=-1 vlc --no-audio --no-video-title-show', shell=True)",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "vlc"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_global_key_play_pause(get_vlc_config(env, config={'dest': 'vlcrc'}), get_rule(env, config={'rules': {'expected_global_key_play_pause': 1}}))"
+  },
+  "trajectory": "trajectories/"
+}

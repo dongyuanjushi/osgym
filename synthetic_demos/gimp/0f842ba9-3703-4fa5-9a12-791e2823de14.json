@@ -1,0 +1,21 @@
+{
+  "id": "0f842ba9-3703-4fa5-9a12-791e2823de14",
+  "snapshot": "gimp",
+  "instruction": "Resize the image to exactly 200 pixels wide by 100 pixels tall, then save it back to the same path.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_gimp_image_setup(path='/home/user/Desktop/resize_demo.png', width=400, height=300, color='white')",
+    "_open_setup(path='/home/user/Desktop/resize_demo.png')"
+  ],
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='GNU Image Manipulation Program', strict=False)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_image_size(get_vm_file(env, config={'path': '/home/user/Desktop/resize_demo.png', 'dest': 'resize_demo.png'}), get_rule(env, config={'rules': {'width': 200, 'height': 100}}))"
+  },
+  "trajectory": "trajectories/"
+}

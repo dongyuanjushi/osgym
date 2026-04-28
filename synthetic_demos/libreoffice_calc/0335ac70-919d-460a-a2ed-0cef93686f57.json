@@ -1,0 +1,21 @@
+{
+  "id": "0335ac70-919d-460a-a2ed-0cef93686f57",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Save the current spreadsheet as /tmp/calc_export.csv keeping the existing header row 'Name,Score' and at least one data row containing 'Alice'.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_calc_file_setup(path='/home/user/Desktop/export_demo.xlsx', data=[['Name', 'Score'], ['Alice', 90], ['Bob', 85]], sheet_name='Scores')",
+    "_open_setup(path='/home/user/Desktop/export_demo.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='export_demo.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "file_contains(get_vm_file(env, config={'path': '/tmp/calc_export.csv', 'dest': 'calc_export.csv'}), get_rule(env, config={'rules': {'expected': ['Name', 'Score', 'Alice']}}))"
+  },
+  "trajectory": "trajectories/"
+}

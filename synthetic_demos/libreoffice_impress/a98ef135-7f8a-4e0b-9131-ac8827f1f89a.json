@@ -1,0 +1,23 @@
+{
+  "id": "a98ef135-7f8a-4e0b-9131-ac8827f1f89a",
+  "snapshot": "libreoffice_impress",
+  "instruction": "Change the background fill of slide 1 to pure red (RGB 255,0,0) and save the presentation.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_impress_file_setup(path='/home/user/Desktop/bg_demo.pptx', slides=[{'title': 'Slide One', 'content': 'First bullet'}, {'title': 'Slide Two'}])",
+    "_open_setup(path='/home/user/Desktop/bg_demo.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_impress"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='bg_demo.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "evaluate_presentation_fill_to_rgb_distance(get_vm_file(env, config={'path': '/home/user/Desktop/bg_demo.pptx', 'dest': 'bg_demo.pptx'}), get_rule(env, config={'rules': {'rgb': [255, 0, 0], 'original_rgb': [255, 255, 255]}}))"
+  },
+  "trajectory": "trajectories/"
+}

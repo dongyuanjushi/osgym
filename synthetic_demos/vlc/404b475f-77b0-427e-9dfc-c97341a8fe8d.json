@@ -1,0 +1,18 @@
+{
+  "id": "404b475f-77b0-427e-9dfc-c97341a8fe8d",
+  "snapshot": "vlc",
+  "instruction": "Disable VLC's splash-screen background cone (qt-bgcone) and persist the change in vlcrc.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command='VLC_VERBOSE=-1 vlc --no-audio --no-video-title-show', shell=True)",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "vlc"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_qt_bgcone(get_vlc_config(env, config={'dest': 'vlcrc'}), get_rule(env, config={'rules': {'expected_qt_bgcone': 0}}))"
+  },
+  "trajectory": "trajectories/"
+}

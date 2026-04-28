@@ -1,0 +1,18 @@
+{
+  "id": "c121fb01-4dc2-4ba6-a53c-6d913983ff70",
+  "snapshot": "vlc",
+  "instruction": "Switch VLC into minimal view (qt-minimal-view = 1).",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command='VLC_VERBOSE=-1 vlc --no-audio --no-video-title-show', shell=True)",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "vlc"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_qt_minimal_view(get_vlc_config(env, config={'dest': 'vlcrc'}), get_rule(env, config={'rules': {'expected_qt_minimal_view': 1}}))"
+  },
+  "trajectory": "trajectories/"
+}

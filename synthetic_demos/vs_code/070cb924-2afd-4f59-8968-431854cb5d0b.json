@@ -1,0 +1,18 @@
+{
+  "id": "070cb924-2afd-4f59-8968-431854cb5d0b",
+  "snapshot": "vs_code",
+  "instruction": "Install Microsoft's official Python extension (ms-python.python) inside VS Code.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['code'])",
+    "_activate_window_setup(window_name='Visual Studio Code')"
+  ],
+  "related_apps": [
+    "vs_code"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "is_extension_installed(get_vm_command_line(env, config={'command': ['code', '--list-extensions'], 'shell': False}), get_rule(env, config={'rules': {'type': 'contain', 'expected': 'ms-python.python'}}))"
+  },
+  "trajectory": "trajectories/"
+}

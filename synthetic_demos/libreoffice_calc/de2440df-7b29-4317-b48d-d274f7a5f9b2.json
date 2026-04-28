@@ -1,0 +1,23 @@
+{
+  "id": "de2440df-7b29-4317-b48d-d274f7a5f9b2",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Add a SUM formula in the last row of column A so the row total matches the sum of values 10, 20, 30 (i.e. 60).",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_calc_file_setup(path='/home/user/Desktop/sum_demo.xlsx', data=[['Value'], [10], [20], [30]], sheet_name='Sheet1')",
+    "_open_setup(path='/home/user/Desktop/sum_demo.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='sum_demo.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "is_in_list(get_content_from_vm_file(env, config={'path': '/home/user/Desktop/sum_demo.xlsx', 'file_type': 'xlsx', 'file_content': 'last_row'}), get_rule(env, config={'rules': {'expected': 60}}))"
+  },
+  "trajectory": "trajectories/"
+}

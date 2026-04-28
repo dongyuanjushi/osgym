@@ -1,0 +1,24 @@
+{
+  "id": "2841d731-4fcd-4e36-91dc-4337eee9c67a",
+  "snapshot": "multi_apps",
+  "instruction": "Take the latest revenue figure from /home/user/Desktop/sales.xlsx and paste it into /home/user/Desktop/report.docx so the report contains '4321'.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_calc_file_setup(path='/home/user/Desktop/sales.xlsx', data=[['Quarter', 'Revenue'], ['Q1', 1234], ['Q2', 4321]])",
+    "_create_writer_file_setup(path='/home/user/Desktop/report.docx', paragraphs=['Quarterly report:', 'Latest revenue: '])",
+    "_open_setup(path='/home/user/Desktop/report.docx')"
+  ],
+  "related_apps": [
+    "multi_apps"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='report.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "file_contains(get_vm_file(env, config={'path': '/home/user/Desktop/report.docx', 'dest': 'report.docx'}), get_rule(env, config={'rules': {'expected': ['4321']}}))"
+  },
+  "trajectory": "trajectories/"
+}

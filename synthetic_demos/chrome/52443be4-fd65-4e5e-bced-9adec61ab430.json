@@ -1,0 +1,18 @@
+{
+  "id": "52443be4-fd65-4e5e-bced-9adec61ab430",
+  "snapshot": "chrome",
+  "instruction": "Enable Chrome's Safe Browsing protection (standard mode is sufficient).",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "exact_match(get_enable_safe_browsing(env, config={}), get_rule(env, config={'rules': {'expected': 'true'}}))"
+  },
+  "trajectory": "trajectories/"
+}

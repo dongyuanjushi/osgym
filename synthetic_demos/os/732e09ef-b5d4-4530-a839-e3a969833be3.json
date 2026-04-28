@@ -1,0 +1,15 @@
+{
+  "id": "732e09ef-b5d4-4530-a839-e3a969833be3",
+  "snapshot": "os",
+  "instruction": "Copy the literal string 'hello-clipboard' to the system clipboard.",
+  "source": "hand-curated demo",
+  "config": [],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "is_in_vm_clickboard(get_rule(env, config={'rules': {'expected': 'hello-clipboard'}}), get_vm_command_line(env, config={'command': 'xclip -selection clipboard -o', 'shell': True}))"
+  },
+  "trajectory": "trajectories/"
+}

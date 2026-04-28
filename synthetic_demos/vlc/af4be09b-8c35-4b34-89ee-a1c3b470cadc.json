@@ -1,0 +1,18 @@
+{
+  "id": "af4be09b-8c35-4b34-89ee-a1c3b470cadc",
+  "snapshot": "vlc",
+  "instruction": "Raise VLC's qt-max-volume preference to 200 percent and save it to vlcrc.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command='VLC_VERBOSE=-1 vlc --no-audio --no-video-title-show', shell=True)",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "vlc"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_qt_max_volume(get_vlc_config(env, config={'dest': 'vlcrc'}), get_rule(env, config={'rules': {'expected_qt_max_volume': 200}}))"
+  },
+  "trajectory": "trajectories/"
+}

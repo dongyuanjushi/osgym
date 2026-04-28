@@ -1,0 +1,18 @@
+{
+  "id": "f62570cb-cb82-4d90-b4fe-3a550fb34cdc",
+  "snapshot": "vlc",
+  "instruction": "Set VLC's input-record-path so recorded media is saved into /home/user/Videos.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command='VLC_VERBOSE=-1 vlc --no-audio --no-video-title-show', shell=True)",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "vlc"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "is_vlc_recordings_folder(get_vlc_config(env, config={'dest': 'vlcrc'}), get_rule(env, config={'rules': {'recording_file_path': '/home/user/Videos'}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "065f1505-f596-454c-a19c-84ce32f4c28e",
+  "snapshot": "os",
+  "instruction": "Copy demo.jpg and bg.jpg into ~/Desktop/cpjpg so the directory contains exactly those two JPEG files.",
+  "source": "hand-curated demo",
+  "config": [
+    "_execute_setup(command='mkdir -p /home/user/Desktop/cpjpg && touch /home/user/Desktop/demo.jpg /home/user/Desktop/bg.jpg', shell=True)"
+  ],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_moved_jpgs(get_list_directory(env, config={'path': '/home/user/Desktop/cpjpg'}), get_rule(env, config={'rules': {'expected': ['demo.jpg', 'bg.jpg']}}))"
+  },
+  "trajectory": "trajectories/"
+}

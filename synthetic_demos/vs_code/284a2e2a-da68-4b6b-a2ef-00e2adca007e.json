@@ -1,0 +1,18 @@
+{
+  "id": "284a2e2a-da68-4b6b-a2ef-00e2adca007e",
+  "snapshot": "vs_code",
+  "instruction": "Set VS Code's editor.wordWrapColumn user setting to 80 columns.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['code'])",
+    "_activate_window_setup(window_name='Visual Studio Code')"
+  ],
+  "related_apps": [
+    "vs_code"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_json_settings(get_vm_file(env, config={'path': '/home/user/.config/Code/User/settings.json', 'dest': 'settings.json'}), get_rule(env, config={'rules': {'expected': {'editor.wordWrapColumn': 80}}}))"
+  },
+  "trajectory": "trajectories/"
+}

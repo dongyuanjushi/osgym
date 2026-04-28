@@ -1,0 +1,18 @@
+{
+  "id": "51180955-9bda-414a-bbf0-abfa1ff246b5",
+  "snapshot": "thunderbird",
+  "instruction": "Configure the default identity to compose messages in plain text instead of HTML.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['/usr/bin/thunderbird'])",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_thunderbird_prefs(get_vm_file(env, config={'path': '/home/user/.thunderbird/t5q2a5hp.default-release/prefs.js', 'dest': 'thunder-prefs.js'}), get_rule(env, config={'rules': {'expect': {'mail.identity.id1.compose_html': {'method': 'eq', 'ref': False}}}}))"
+  },
+  "trajectory": "trajectories/"
+}

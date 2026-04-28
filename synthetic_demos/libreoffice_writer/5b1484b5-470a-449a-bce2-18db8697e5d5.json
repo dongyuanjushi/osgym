@@ -1,0 +1,23 @@
+{
+  "id": "5b1484b5-470a-449a-bce2-18db8697e5d5",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Insert a single page break after the first paragraph and save the document.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_writer_file_setup(path='/home/user/Desktop/page_break_demo.docx', paragraphs=['Introduction paragraph.', 'Body paragraph one.', 'Body paragraph two.'])",
+    "_open_setup(path='/home/user/Desktop/page_break_demo.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='page_break_demo.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "contains_page_break(get_vm_file(env, config={'path': '/home/user/Desktop/page_break_demo.docx', 'dest': 'page_break_demo.docx'}), get_rule(env, config={'rules': {'page_break_count': 1}}))"
+  },
+  "trajectory": "trajectories/"
+}
