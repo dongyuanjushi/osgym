@@ -51,8 +51,7 @@ def call_llm_with_single_response(
     elif provider == "vllm":
         assert "endpoint" in llm_config, "endpoint is required for vllm"
         vllm_client = openai.OpenAI(
-            base_url=llm_config["endpoint"],
-            api_key="token-abc123",
+            base_url=llm_config["endpoint"]
         )
         if response_format is not None:
             completion = vllm_client.chat.completions.create(
@@ -61,14 +60,20 @@ def call_llm_with_single_response(
                 max_tokens=max_tokens,
                 temperature=temperature,
                 top_p=top_p,
-                extra_body={"guided_json": response_format.model_json_schema()}
+                extra_body={
+                    "guided_json": response_format.model_json_schema(),
+                    "chat_template_kwargs": {"enable_thinking": False}
+                }
             )
         else:
             completion = vllm_client.chat.completions.create(
                 model=model,
                 messages=messages,
                 max_tokens=max_tokens,
-                temperature=temperature
+                temperature=temperature,
+                extra_body={
+                    "chat_template_kwargs": {"enable_thinking": False}
+                }
             )
         return completion.choices[0].message.content
     
