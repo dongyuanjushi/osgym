@@ -22,6 +22,7 @@ import datetime
 import json
 import logging
 import os
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -572,3 +573,54 @@ def build_vector_store(
         f"existing entries across all domains={store.count()})"
     )
     return store
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LastDedupMessages - domain-independent buffer of last-batch dedup notices
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class LastDedupMessages:
+    """Thread-safe buffer holding the dedup-rejection messages from the most
+    recently completed synthesis batch.
+
+    The buffer is *domain-independent*: a batch in any domain replaces it,
+    and the next batch in any domain reads it. This is intentional — when a
+    parallel run synthesizes multiple domains, surfacing the latest rejected
+    duplicates (regardless of which domain produced them) helps every worker
+    avoid emitting near-duplicates that the LLM has already proposed.
+
+    Only the *last* round is retained; each ``replace`` call drops everything
+    that was there before. This keeps the prompt block short and focused on
+    the freshest signal rather than dragging along an unbounded history.
+    """
+
+    def __init__(self):
+        self._messages: List[str] = []
+        self._lock = threading.Lock()
+
+    def replace(self, messages: List[str]) -> None:
+        """Overwrite the buffer with ``messages``. Call this once per batch."""
+        with self._lock:
+            self._messages = list(messages)
+
+    def snapshot(self) -> List[str]:
+        """Return a copy of the current messages (safe to render outside the lock)."""
+        with self._lock:
+            return list(self._messages)
+
+    def format_for_prompt(self) -> str:
+        """Render the buffer as a user-prompt block; empty string when no messages."""
+        snap = self.snapshot()
+        if not snap:
+            return ""
+        lines = [
+            "## Just-rejected near-duplicates",
+            "The following candidate task(s) were rejected in the previous "
+            "synthesis round because they were near-duplicates of tasks "
+            "already on file. Do NOT emit anything similar in this batch — "
+            "pick a different feature, menu path, or observable state change.",
+        ]
+        for m in snap:
+            lines.append(f"  - {m}")
+        return "\n".join(lines) + "\n"
