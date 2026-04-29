@@ -576,48 +576,60 @@ def build_vector_store(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# LastDedupMessages - domain-independent buffer of last-batch dedup notices
+# DedupHistory - per-domain rolling list of dedup-rejection messages
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class LastDedupMessages:
-    """Thread-safe buffer holding the dedup-rejection messages from the most
-    recently completed synthesis batch.
+class DedupHistory:
+    """Thread-safe per-domain rolling list of dedup-rejection messages.
 
-    The buffer is *domain-independent*: a batch in any domain replaces it,
-    and the next batch in any domain reads it. This is intentional — when a
-    parallel run synthesizes multiple domains, surfacing the latest rejected
-    duplicates (regardless of which domain produced them) helps every worker
-    avoid emitting near-duplicates that the LLM has already proposed.
+    Every batch ``extend``s its own domain's list with the rejection
+    messages produced by ``VectorDedupStore.filter_batch``; the list is
+    capped at ``max_per_domain`` entries (default 100) and the oldest
+    rejections are evicted FIFO when the cap is exceeded. The next batch
+    for that domain reads ``format_for_prompt(domain)`` and surfaces the
+    accumulated list to the LLM so the model can see *every* recent
+    near-duplicate it should avoid emitting again — not just the previous
+    batch's rejections.
 
-    Only the *last* round is retained; each ``replace`` call drops everything
-    that was there before. This keeps the prompt block short and focused on
-    the freshest signal rather than dragging along an unbounded history.
+    Each domain has its own list; rejections from one domain do not bleed
+    into another. The instruction text itself is stored verbatim and is
+    domain-agnostic, so the prompt block contains no domain tags.
     """
 
-    def __init__(self):
-        self._messages: List[str] = []
+    def __init__(self, max_per_domain: int = 100):
+        if max_per_domain <= 0:
+            raise ValueError("max_per_domain must be positive")
+        self.max_per_domain = max_per_domain
+        self._by_domain: Dict[str, List[str]] = {}
         self._lock = threading.Lock()
 
-    def replace(self, messages: List[str]) -> None:
-        """Overwrite the buffer with ``messages``. Call this once per batch."""
+    def extend(self, domain: str, messages: List[str]) -> None:
+        """Append ``messages`` to ``domain``'s list, FIFO-trimming to the cap."""
+        if not messages:
+            return
         with self._lock:
-            self._messages = list(messages)
+            buf = self._by_domain.setdefault(domain, [])
+            buf.extend(messages)
+            if len(buf) > self.max_per_domain:
+                # Drop the oldest entries so the list is bounded by the cap.
+                del buf[: len(buf) - self.max_per_domain]
 
-    def snapshot(self) -> List[str]:
-        """Return a copy of the current messages (safe to render outside the lock)."""
+    def snapshot(self, domain: str) -> List[str]:
+        """Return a copy of ``domain``'s list (safe to render outside the lock)."""
         with self._lock:
-            return list(self._messages)
+            return list(self._by_domain.get(domain, []))
 
-    def format_for_prompt(self) -> str:
-        """Render the buffer as a user-prompt block; empty string when no messages."""
-        snap = self.snapshot()
+    def format_for_prompt(self, domain: str) -> str:
+        """Render ``domain``'s list as a user-prompt block; empty when none."""
+        snap = self.snapshot(domain)
         if not snap:
             return ""
         lines = [
-            "## Just-rejected near-duplicates",
-            "The following candidate task(s) were rejected in the previous "
-            "synthesis round because they were near-duplicates of tasks "
+            f"## Already-flagged near-duplicates "
+            f"(last {len(snap)} rejection(s) for this domain)",
+            "The following candidate task(s) were rejected in earlier "
+            "synthesis rounds because they were near-duplicates of tasks "
             "already on file. Do NOT emit anything similar in this batch — "
             "pick a different feature, menu path, or observable state change.",
         ]

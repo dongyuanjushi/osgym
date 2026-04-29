@@ -41,7 +41,7 @@ from desktop_env.evaluators.schema import (
 )
 
 from .prompts import TASK_GEN_SYSTEM
-from .shared_memory import LastDedupMessages, SynthesisMemory, VectorDedupStore
+from .shared_memory import DedupHistory, SynthesisMemory, VectorDedupStore
 
 logger = logging.getLogger("desktopenv.synthesis.task_creator")
 
@@ -442,11 +442,12 @@ def generate_task_examples(
     parallel mode so the read happens atomically with respect to concurrent
     ``memory.record`` calls); otherwise it is derived from ``memory`` here.
 
-    ``dedup_block`` is a domain-independent block listing the duplicates
-    that ``VectorDedupStore.filter_batch`` rejected during the most recently
-    completed batch (in any domain). Surfacing those rejections to the LLM
-    discourages it from re-proposing the same near-duplicates this round.
-    Empty/None means no last-round signal to inject.
+    ``dedup_block`` is a per-domain block listing the duplicates that
+    ``VectorDedupStore.filter_batch`` has rejected for this domain across
+    earlier batches (capped at ``DedupHistory.max_per_domain``, default
+    100). Surfacing those rejections to the LLM discourages it from
+    re-proposing the same near-duplicates this round. Empty/None means
+    nothing has been rejected for this domain yet.
     """
     # Curated demos are the LLM's primary source of correct call patterns —
     # they showcase how to pair file-creation setup with `_open_setup`, how
@@ -1451,7 +1452,7 @@ def _synthesize_domain(
     batch_size: int,
     total_examples: int,
     max_empty_batches: int,
-    last_dedup: Optional[LastDedupMessages] = None,
+    dedup_history: Optional[DedupHistory] = None,
     write_lock: Optional[threading.Lock] = None,
 ) -> List[Dict[str, Any]]:
     """Run the batched synthesis loop for one domain end-to-end.
@@ -1506,16 +1507,16 @@ def _synthesize_domain(
             with hold():
                 memory_block = memory.format_for_prompt(domain)
 
-        # Pull the most recent batch's dedup-rejection block. The buffer is
-        # shared across domains, so a duplicate caught while synthesizing
-        # one domain still steers the next batch in any other domain.
-        # ``LastDedupMessages.format_for_prompt`` is internally locked, but
-        # we additionally hold the write_lock so the snapshot can't change
-        # mid-build of the prompt.
+        # Pull THIS domain's accumulated dedup-rejection block. The history
+        # is keyed by domain so rejections from one app don't bleed into
+        # another, and capped at ``DedupHistory.max_per_domain`` (default
+        # 100) so the prompt stays bounded even on long runs. The class is
+        # internally locked, but we additionally hold the write_lock so
+        # the snapshot can't change mid-build of the prompt.
         dedup_block: Optional[str] = None
-        if last_dedup is not None:
+        if dedup_history is not None:
             with hold():
-                dedup_block = last_dedup.format_for_prompt()
+                dedup_block = dedup_history.format_for_prompt(domain)
 
         examples = generate_task_examples(
             domain_info, catalog, llm_config,
@@ -1563,14 +1564,11 @@ def _synthesize_domain(
             batch_valid = decision.accepted
             duplicates = decision.rejected
 
-        # Replace the shared "last round of duplicates" buffer with messages
-        # rendered from THIS batch's rejections. Domain-independent on
-        # purpose: the next batch in any domain (or any worker thread) will
-        # read this same buffer and steer the LLM away from re-emitting the
-        # same near-duplicates. Empty list when nothing was rejected — the
-        # buffer is overwritten unconditionally so a clean batch clears any
-        # stale messages from earlier rounds.
-        if last_dedup is not None:
+        # Append THIS batch's dedup rejections to this domain's rolling
+        # history. The list is FIFO-trimmed at the cap inside ``extend``,
+        # so the prompt stays bounded even on long runs. No-op when the
+        # batch had no rejections (nothing to add).
+        if dedup_history is not None and duplicates:
             messages = [
                 f'"{(ex.get("instruction") or "").strip()}" was rejected as a near-duplicate '
                 f'of an existing task "{(match.instruction or "").strip()}" '
@@ -1578,7 +1576,7 @@ def _synthesize_domain(
                 for ex, match in duplicates
             ]
             with hold():
-                last_dedup.replace(messages)
+                dedup_history.extend(domain, messages)
 
         # 3) Persist accepted examples to disk (unique filenames per id, so
         #    no cross-thread file collision — runs outside the lock).
@@ -1685,7 +1683,7 @@ def _run_synthesize_sequential(
     batch_size: int,
     total_examples: int,
     max_empty_batches: int,
-    last_dedup: Optional[LastDedupMessages] = None,
+    dedup_history: Optional[DedupHistory] = None,
 ) -> List[Dict[str, Any]]:
     """Sequential synthesis: process domains one at a time in the main thread."""
     logger.info(
@@ -1697,7 +1695,7 @@ def _run_synthesize_sequential(
         all_examples.extend(_synthesize_domain(
             domain, args, memory, vector_store, on_batch_complete,
             catalog, llm_config, batch_size, total_examples,
-            max_empty_batches, last_dedup=last_dedup, write_lock=None,
+            max_empty_batches, dedup_history=dedup_history, write_lock=None,
         ))
     return all_examples
 
@@ -1715,7 +1713,7 @@ def _run_synthesize_parallel(
     batch_size: int,
     total_examples: int,
     max_empty_batches: int,
-    last_dedup: Optional[LastDedupMessages] = None,
+    dedup_history: Optional[DedupHistory] = None,
 ) -> List[Dict[str, Any]]:
     """Parallel synthesis: a thread pool runs one domain per worker.
 
@@ -1741,7 +1739,7 @@ def _run_synthesize_parallel(
                 _synthesize_domain,
                 domain, args, memory, vector_store, on_batch_complete,
                 catalog, llm_config, batch_size, total_examples,
-                max_empty_batches, last_dedup, write_lock,
+                max_empty_batches, dedup_history, write_lock,
             ): domain
             for domain in targets
         }
@@ -1799,11 +1797,12 @@ def run_synthesize(
     total_examples = args.total_examples if args.total_examples > 0 else args.num_examples
     max_empty_batches = max(1, args.max_empty_batches)
 
-    # Domain-independent buffer of last-batch dedup rejections, shared across
-    # every domain worker. Each batch overwrites it with its own rejections,
-    # and every batch in any domain reads the latest snapshot when building
-    # its prompt.
-    last_dedup = LastDedupMessages()
+    # Per-domain rolling history of dedup rejections (capped at 100 entries
+    # per domain). Each domain worker appends its own batch's rejections;
+    # the next batch in that same domain reads the accumulated list and
+    # passes it to the LLM so the model sees every recent near-duplicate
+    # already flagged for this domain.
+    dedup_history = DedupHistory(max_per_domain=100)
 
     synthesize_mode = getattr(args, "synthesize_mode", "sequential")
     # breakpoint()
@@ -1811,13 +1810,13 @@ def run_synthesize(
         all_examples = _run_synthesize_parallel(
             args, memory, vector_store, on_batch_complete, targets,
             catalog, llm_config, batch_size, total_examples, max_empty_batches,
-            last_dedup=last_dedup,
+            dedup_history=dedup_history,
         )
     else:
         all_examples = _run_synthesize_sequential(
             args, memory, vector_store, on_batch_complete, targets,
             catalog, llm_config, batch_size, total_examples, max_empty_batches,
-            last_dedup=last_dedup,
+            dedup_history=dedup_history,
         )
 
     # Rebuild manifest from every validated example on disk so accumulated
