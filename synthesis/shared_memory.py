@@ -21,7 +21,6 @@ from __future__ import annotations
 import datetime
 import json
 import logging
-import math
 import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -318,25 +317,11 @@ def _task_text(instruction: str, evaluator_eval: str = "") -> str:
     return (instruction or "").strip()
 
 
-def _cosine(a: Sequence[float], b: Sequence[float]) -> float:
-    dot = 0.0
-    na = 0.0
-    nb = 0.0
-    for x, y in zip(a, b):
-        dot += x * y
-        na += x * x
-        nb += y * y
-    if na == 0.0 or nb == 0.0:
-        return 0.0
-    return dot / (math.sqrt(na) * math.sqrt(nb))
-
-
 @dataclass
 class SimilarMatch:
     id: str
     instruction: str
     similarity: float
-    source: str  # "db" or "intra_batch"
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -386,9 +371,23 @@ class VectorDedupStore:
         domain: str,
         examples: List[Dict[str, Any]],
     ) -> DedupDecision:
-        """Drop examples whose nearest neighbor (in DB or earlier in this
-        batch) exceeds the similarity threshold. Embeddings are computed in a
-        single batched call so the network overhead is one round-trip."""
+        """Reject examples whose nearest neighbor in the persistent store
+        exceeds ``self.similarity_threshold``, and upsert each accepted
+        example into the store immediately so the next example in the same
+        batch (and any subsequent run) dedups against it.
+
+        Earlier revisions ran a second, in-memory ``_check_intra_batch``
+        pass to catch near-duplicates produced inside a single LLM call.
+        That approach was both redundant and incorrect: the source of truth
+        is the Chroma collection, and any two passes that don't go through
+        it can drift (e.g. the in-memory pass had no awareness of records
+        added by sibling threads or earlier runs). Upserting per-example
+        below collapses both checks into the DB query.
+
+        Embeddings for the whole batch are computed in one call so the
+        network overhead is a single round-trip, then each example is
+        checked-and-upserted serially against the persistent collection.
+        """
         if not examples:
             return DedupDecision()
 
@@ -403,34 +402,32 @@ class VectorDedupStore:
             return DedupDecision(accepted=list(examples))
 
         col = self._collection(domain)
-        have_db = False
-        try:
-            have_db = col.count() > 0
-        except Exception as e:
-            logger.warning(f"[vector-dedup] collection count failed: {e}")
-
         decision = DedupDecision()
-        accepted_embs: List[List[float]] = []
 
-        for ex, emb in zip(examples, embeddings):
-            # 1) Check against persisted solvable set
-            db_match = self._query_db(col, emb) if have_db else None
-            if db_match is not None:
-                decision.rejected.append((ex, db_match))
+        for ex, emb, text in zip(examples, embeddings, texts):
+            match = self._query_db(col, emb)
+            if match is not None:
+                decision.rejected.append((ex, match))
                 continue
 
-            # 2) Check against examples already accepted in this batch
-            intra_match = self._check_intra_batch(emb, decision.accepted, accepted_embs)
-            if intra_match is not None:
-                decision.rejected.append((ex, intra_match))
-                continue
-
+            # Upsert immediately so the next iteration's _query_db sees this
+            # record and rejects near-duplicates within the same batch via
+            # the same code path used for cross-run dedup. A failure here
+            # only forfeits future dedup of this id — we still accept the
+            # example so the caller can persist it to disk.
+            self._upsert(col, ex, emb, text, domain)
             decision.accepted.append(ex)
-            accepted_embs.append(emb)
 
         return decision
 
     def _query_db(self, col, emb: List[float]) -> Optional[SimilarMatch]:
+        """Return the nearest persisted example whose similarity exceeds the
+        configured threshold, or ``None`` if no such record exists.
+
+        ``col.query`` on an empty collection returns empty result lists, so
+        this function naturally handles the cold-start case without a
+        separate ``count() > 0`` guard.
+        """
         try:
             res = col.query(
                 query_embeddings=[emb],
@@ -454,52 +451,34 @@ class VectorDedupStore:
             id=ids[0],
             instruction=meta.get("instruction") or doc,
             similarity=sim,
-            source="db",
             metadata=meta,
         )
 
-    def _check_intra_batch(
+    def _upsert(
         self,
-        emb: List[float],
-        accepted: List[Dict[str, Any]],
-        accepted_embs: List[List[float]],
-    ) -> Optional[SimilarMatch]:
-        for prev_ex, prev_emb in zip(accepted, accepted_embs):
-            sim = _cosine(emb, prev_emb)
-            if sim >= self.similarity_threshold:
-                return SimilarMatch(
-                    id=prev_ex.get("id", ""),
-                    instruction=prev_ex.get("instruction", ""),
-                    similarity=sim,
-                    source="intra_batch",
-                )
-        return None
+        col,
+        example: Dict[str, Any],
+        embedding: List[float],
+        text: str,
+        domain: str,
+    ) -> bool:
+        """Persist a single example's embedding and metadata to ``col``.
 
-    # -- writes -------------------------------------------------------------
-
-    def add_solvable(self, example: Dict[str, Any], domain: str) -> bool:
+        Idempotent — repeated calls for the same id overwrite the existing
+        row. Returns ``False`` if the example has no id or the upsert call
+        raises (the caller still accepts the example in the latter case so
+        a transient Chroma failure doesn't drop work).
+        """
         eid = example.get("id")
         if not eid:
-            logger.warning("[vector-dedup] skipping add: example has no id")
+            logger.warning("[vector-dedup] skipping upsert: example has no id")
             return False
-
         instruction = example.get("instruction", "") or ""
         evaluator_eval = (example.get("evaluator") or {}).get("eval", "") or ""
-        # Embed only the instruction — the evaluator string is preserved on
-        # the Chroma metadata below for diagnostics but doesn't influence
-        # similarity scoring (see ``_task_text``).
-        text = _task_text(instruction)
-
         try:
-            emb = self.embedder.embed([text])[0]
-        except Exception as e:
-            logger.warning(f"[vector-dedup] embedding failed during add: {e}")
-            return False
-
-        try:
-            self._collection(domain).upsert(
+            col.upsert(
                 ids=[eid],
-                embeddings=[emb],
+                embeddings=[embedding],
                 documents=[text],
                 metadatas=[{
                     "id": eid,
@@ -512,6 +491,25 @@ class VectorDedupStore:
             logger.warning(f"[vector-dedup] upsert failed for {eid}: {e}")
             return False
         return True
+
+    # -- writes -------------------------------------------------------------
+
+    def add_solvable(self, example: Dict[str, Any], domain: str) -> bool:
+        """Upsert ``example`` into the per-domain dedup collection.
+
+        ``filter_batch`` already upserts every accepted example, so this
+        path is mostly redundant for the synthesize→verify flow; it remains
+        for callers (e.g. the standalone verify mode) that want to register
+        an example without going through ``filter_batch``. Idempotent —
+        repeated calls for the same id overwrite the row.
+        """
+        text = _task_text(example.get("instruction", "") or "")
+        try:
+            emb = self.embedder.embed([text])[0]
+        except Exception as e:
+            logger.warning(f"[vector-dedup] embedding failed during add: {e}")
+            return False
+        return self._upsert(self._collection(domain), example, emb, text, domain)
 
     def count(self, domain: Optional[str] = None) -> int:
         if domain is not None:

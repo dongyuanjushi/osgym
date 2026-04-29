@@ -504,7 +504,7 @@ def generate_task_examples(
         f"prompt.\n"
         f"Return a JSON array of task objects (no markdown fences)."
     )
-    breakpoint()
+    # breakpoint()
     messages = [
         {"role": "system", "content": TASK_GEN_SYSTEM},
         {"role": "user", "content": user},
@@ -1512,9 +1512,13 @@ def _synthesize_domain(
                 )
                 statically_invalid.append((ex, err))
 
-        # 2) Vector-DB dedup — locked so the read sees writes from peers'
-        #    add_solvable calls and the per-store collection cache stays
-        #    consistent across threads.
+        # 2) Vector-DB dedup. ``filter_batch`` queries the persistent Chroma
+        #    collection for each example's nearest neighbour and upserts
+        #    accepted ones immediately, so a duplicate emitted later in the
+        #    same batch is caught via the same DB query (no separate
+        #    in-memory intra-batch pass). The whole call runs under the
+        #    write_lock so concurrent worker threads see consistent reads
+        #    and the per-store collection cache stays coherent.
         duplicates: List[Tuple[Dict[str, Any], Any]] = []
         if vector_store is not None and batch_valid:
             with hold():
@@ -1527,7 +1531,7 @@ def _synthesize_domain(
                 for ex_rej, match in decision.rejected:
                     logger.info(
                         f"  - skip {str(ex_rej.get('id', '?'))[:8]} "
-                        f"sim={match.similarity:.3f} [{match.source}] "
+                        f"sim={match.similarity:.3f} "
                         f"-> {str(match.id)[:8]} ({(match.instruction or '')[:80]!r})"
                     )
             batch_valid = decision.accepted
@@ -1577,7 +1581,7 @@ def _synthesize_domain(
                         example=ex, domain=domain,
                         code_result={
                             "score": -1,
-                            "error": f"duplicate_of={match.id} sim={match.similarity:.3f} [{match.source}]",
+                            "error": f"duplicate_of={match.id} sim={match.similarity:.3f}",
                         },
                         executable=False,
                     )
