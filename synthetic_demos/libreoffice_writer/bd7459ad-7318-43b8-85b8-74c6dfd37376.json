@@ -1,0 +1,21 @@
+{
+  "id": "bd7459ad-7318-43b8-85b8-74c6dfd37376",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Enable LibreOffice Writer auto-save every 3 minutes so the configuration records 3 as the autosave interval.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_writer_file_setup(path='/home/user/Desktop/writer_autosave_demo.docx', paragraphs=['Autosave demo paragraph.'])",
+    "_open_setup(path='/home/user/Desktop/writer_autosave_demo.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='writer_autosave_demo.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_auto_saving_time(get_vm_file(env, config={'path': '/home/user/.config/libreoffice/4/user/registrymodifications.xcu', 'dest': 'registrymodifications.xcu'}), get_rule(env, config={'rules': {'minutes': 3}}))"
+  },
+  "trajectory": "trajectories/"
+}

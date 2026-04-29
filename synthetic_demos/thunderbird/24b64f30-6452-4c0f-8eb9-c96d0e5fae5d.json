@@ -1,0 +1,18 @@
+{
+  "id": "24b64f30-6452-4c0f-8eb9-c96d0e5fae5d",
+  "snapshot": "thunderbird",
+  "instruction": "Disable the new-mail desktop alert popup in Thunderbird so no toast appears for incoming messages.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['/usr/bin/thunderbird'])",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_thunderbird_prefs(get_vm_file(env, config={'path': '/home/user/.thunderbird/t5q2a5hp.default-release/prefs.js', 'dest': 'thunder-prefs.js'}), get_rule(env, config={'rules': {'expect': {'mail.biff.show_alert': {'method': 'eq', 'ref': False}}}}))"
+  },
+  "trajectory": "trajectories/"
+}

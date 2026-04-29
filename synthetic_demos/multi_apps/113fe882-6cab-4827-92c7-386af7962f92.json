@@ -1,0 +1,17 @@
+{
+  "id": "113fe882-6cab-4827-92c7-386af7962f92",
+  "snapshot": "multi_apps",
+  "instruction": "Sort /home/user/Desktop/names.txt alphabetically and write the sorted result to /home/user/Desktop/names_sorted.txt.",
+  "source": "hand-curated demo",
+  "config": [
+    "_command_setup(command=['bash', '-c', \"printf 'charlie\\nalpha\\nbravo\\n' > /home/user/Desktop/names.txt\"])"
+  ],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "exact_match(get_vm_command_line(env, config={'command': \"head -1 /home/user/Desktop/names_sorted.txt\", 'shell': True}), get_rule(env, config={'rules': {'expected': 'alpha'}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "e9f5e5c9-7e03-4045-9c45-1aa3a20d3f21",
+  "snapshot": "gimp",
+  "instruction": "Resize the open image so it is exactly 600 pixels wide by 400 pixels tall, then overwrite the file at the same path.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_gimp_image_setup(path='/home/user/Desktop/enlarge_demo.png', width=300, height=200, color='white')",
+    "_open_setup(path='/home/user/Desktop/enlarge_demo.png')"
+  ],
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='GNU Image Manipulation Program', strict=False)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_image_size(get_vm_file(env, config={'path': '/home/user/Desktop/enlarge_demo.png', 'dest': 'enlarge_demo.png'}), get_rule(env, config={'rules': {'width': 600, 'height': 400}}))"
+  },
+  "trajectory": "trajectories/"
+}

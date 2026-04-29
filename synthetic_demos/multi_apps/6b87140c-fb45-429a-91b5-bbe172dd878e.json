@@ -1,0 +1,17 @@
+{
+  "id": "6b87140c-fb45-429a-91b5-bbe172dd878e",
+  "snapshot": "multi_apps",
+  "instruction": "In /home/user/Desktop/reports/, rename file 'draft.txt' to 'final.txt' (the original file should no longer exist).",
+  "source": "hand-curated demo",
+  "config": [
+    "_command_setup(command=['bash', '-c', \"mkdir -p /home/user/Desktop/reports && echo report > /home/user/Desktop/reports/draft.txt\"])"
+  ],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "exact_match(get_vm_command_line(env, config={'command': 'test -f /home/user/Desktop/reports/final.txt && test ! -f /home/user/Desktop/reports/draft.txt && echo ok || echo no', 'shell': True}), get_rule(env, config={'rules': {'expected': 'ok'}}))"
+  },
+  "trajectory": "trajectories/"
+}

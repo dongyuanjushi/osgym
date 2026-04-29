@@ -1,0 +1,18 @@
+{
+  "id": "26c297b0-39c4-419e-97fc-b43324fc8a5a",
+  "snapshot": "thunderbird",
+  "instruction": "Set the default character encoding for outgoing mail in Thunderbird to UTF-8.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['/usr/bin/thunderbird'])",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_thunderbird_prefs(get_vm_file(env, config={'path': '/home/user/.thunderbird/t5q2a5hp.default-release/prefs.js', 'dest': 'thunder-prefs.js'}), get_rule(env, config={'rules': {'expect': {'mailnews.send_default_charset': {'method': 'eq', 'ref': 'UTF-8'}}}}))"
+  },
+  "trajectory": "trajectories/"
+}

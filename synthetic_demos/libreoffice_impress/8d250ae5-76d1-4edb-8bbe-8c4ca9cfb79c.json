@@ -1,0 +1,21 @@
+{
+  "id": "8d250ae5-76d1-4edb-8bbe-8c4ca9cfb79c",
+  "snapshot": "libreoffice_impress",
+  "instruction": "Export the presentation to a 3-page PDF at /tmp/impress_three.pdf (one page per slide).",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_impress_file_setup(path='/home/user/Desktop/impress_three_demo.pptx', slides=[{'title': 'S1'}, {'title': 'S2'}, {'title': 'S3'}])",
+    "_open_setup(path='/home/user/Desktop/impress_three_demo.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_impress"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='impress_three_demo.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_pdf_pages(get_vm_file(env, config={'path': '/tmp/impress_three.pdf', 'dest': 'impress_three.pdf'}), get_rule(env, config={'rules': {'relation': 'eq', 'ref_value': 3}}))"
+  },
+  "trajectory": "trajectories/"
+}

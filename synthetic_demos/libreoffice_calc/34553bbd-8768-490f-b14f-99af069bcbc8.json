@@ -1,0 +1,23 @@
+{
+  "id": "34553bbd-8768-490f-b14f-99af069bcbc8",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Add a COUNT formula in the last row of column A so the row records the count of numeric entries (3 numbers above it).",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_calc_file_setup(path='/home/user/Desktop/count_demo.xlsx', data=[['Value'], [11], [22], [33]], sheet_name='Sheet1')",
+    "_open_setup(path='/home/user/Desktop/count_demo.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='count_demo.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); pyautogui.press('enter'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "is_in_list(get_content_from_vm_file(env, config={'path': '/home/user/Desktop/count_demo.xlsx', 'file_type': 'xlsx', 'file_content': 'last_row'}), get_rule(env, config={'rules': {'expected': 3}}))"
+  },
+  "trajectory": "trajectories/"
+}

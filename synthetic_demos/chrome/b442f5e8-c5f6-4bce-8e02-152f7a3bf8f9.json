@@ -1,0 +1,18 @@
+{
+  "id": "b442f5e8-c5f6-4bce-8e02-152f7a3bf8f9",
+  "snapshot": "chrome",
+  "instruction": "Disable Chrome's enhanced (deeper) Safe Browsing protection so the enhanced tier is OFF (standard safe browsing may remain).",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "exact_match(get_enable_enhanced_safety_browsing(env, config={}), get_rule(env, config={'rules': {'expected': 'false'}}))"
+  },
+  "trajectory": "trajectories/"
+}

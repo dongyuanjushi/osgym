@@ -1,0 +1,23 @@
+{
+  "id": "0ff14c12-51ad-4306-92f1-e3c586a6b701",
+  "snapshot": "libreoffice_impress",
+  "instruction": "Switch slide orientation to portrait for this two-slide deck and save.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_impress_file_setup(path='/home/user/Desktop/portrait_two_demo.pptx', slides=[{'title': 'S1'}, {'title': 'S2'}])",
+    "_open_setup(path='/home/user/Desktop/portrait_two_demo.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_impress"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='portrait_two_demo.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); pyautogui.press('enter'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "check_slide_orientation_Portrait(get_vm_file(env, config={'path': '/home/user/Desktop/portrait_two_demo.pptx', 'dest': 'portrait_two_demo.pptx'}))"
+  },
+  "trajectory": "trajectories/"
+}

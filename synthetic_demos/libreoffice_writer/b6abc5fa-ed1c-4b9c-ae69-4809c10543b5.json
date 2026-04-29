@@ -1,0 +1,23 @@
+{
+  "id": "b6abc5fa-ed1c-4b9c-ae69-4809c10543b5",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Insert page breaks so the saved document contains exactly two page-break markers, then save.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_writer_file_setup(path='/home/user/Desktop/pagebreaks_demo.docx', paragraphs=['Cover page.', 'Chapter one starts here.', 'Chapter two starts here.'])",
+    "_open_setup(path='/home/user/Desktop/pagebreaks_demo.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='pagebreaks_demo.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); pyautogui.press('enter'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "contains_page_break(get_vm_file(env, config={'path': '/home/user/Desktop/pagebreaks_demo.docx', 'dest': 'pagebreaks_demo.docx'}), get_rule(env, config={'rules': {'page_break_count': 2}}))"
+  },
+  "trajectory": "trajectories/"
+}

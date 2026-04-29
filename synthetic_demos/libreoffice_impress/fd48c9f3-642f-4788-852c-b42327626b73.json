@@ -1,0 +1,23 @@
+{
+  "id": "fd48c9f3-642f-4788-852c-b42327626b73",
+  "snapshot": "libreoffice_impress",
+  "instruction": "Apply strikethrough formatting to the only paragraph of the content placeholder on slide 2 and save.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_impress_file_setup(path='/home/user/Desktop/strike_two_demo.pptx', slides=[{'title': 'Intro'}, {'title': 'Slide Two', 'content': 'Cancelled item'}])",
+    "_open_setup(path='/home/user/Desktop/strike_two_demo.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_impress"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='strike_two_demo.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); pyautogui.press('enter'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "check_strikethrough(get_vm_file(env, config={'path': '/home/user/Desktop/strike_two_demo.pptx', 'dest': 'strike_two_demo.pptx'}), get_rule(env, config={'rules': {'slide_index_s': [1], 'shape_index_s': [1], 'paragraph_index_s': [0]}}))"
+  },
+  "trajectory": "trajectories/"
+}

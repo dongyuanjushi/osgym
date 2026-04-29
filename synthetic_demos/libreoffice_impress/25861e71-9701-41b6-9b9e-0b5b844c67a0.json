@@ -1,0 +1,21 @@
+{
+  "id": "25861e71-9701-41b6-9b9e-0b5b844c67a0",
+  "snapshot": "libreoffice_impress",
+  "instruction": "Enable LibreOffice Impress auto-save every 5 minutes so the registry records 5 as the autosave interval.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_impress_file_setup(path='/home/user/Desktop/autosave_five_demo.pptx', slides=[{'title': 'Autosave'}])",
+    "_open_setup(path='/home/user/Desktop/autosave_five_demo.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_impress"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='autosave_five_demo.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_auto_saving_time(get_vm_file(env, config={'path': '/home/user/.config/libreoffice/4/user/registrymodifications.xcu', 'dest': 'registrymodifications.xcu'}), get_rule(env, config={'rules': {'minutes': 5}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "1db27884-5240-4885-8413-1284e8c114d1",
+  "snapshot": "gimp",
+  "instruction": "Configure GIMP so the help button on dialogs is shown (the show-help-button preference is 'yes').",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['gimp'])"
+  ],
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_execute_setup(command=['python3', '-c', 'import time; import pyautogui; time.sleep(1);pyautogui.hotkey([\"ctrl\", \"q\"]);'])",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_config_status(get_gimp_config_file(env, config={'file_name': 'gimprc', 'dest': 'gimprc'}), get_rule(env, config={'rules': {'type:': 'key-value', 'key': 'show-help-button', 'value': 'yes'}}))"
+  },
+  "trajectory": "trajectories/"
+}

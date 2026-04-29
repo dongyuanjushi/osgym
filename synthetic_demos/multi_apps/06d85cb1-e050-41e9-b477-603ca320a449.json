@@ -1,0 +1,17 @@
+{
+  "id": "06d85cb1-e050-41e9-b477-603ca320a449",
+  "snapshot": "multi_apps",
+  "instruction": "Append three new lines to /home/user/Desktop/log.txt so the file ends up with at least eight lines in total.",
+  "source": "hand-curated demo",
+  "config": [
+    "_command_setup(command=['bash', '-c', \"printf 'line1\\nline2\\nline3\\nline4\\nline5\\n' > /home/user/Desktop/log.txt\"])"
+  ],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "is_in_list(get_vm_command_line(env, config={'command': \"awk 'END{print (NR>=8)?\\\"yes\\\":\\\"no\\\"}' /home/user/Desktop/log.txt\", 'shell': True}), get_rule(env, config={'rules': {'expected': 'yes'}}))"
+  },
+  "trajectory": "trajectories/"
+}

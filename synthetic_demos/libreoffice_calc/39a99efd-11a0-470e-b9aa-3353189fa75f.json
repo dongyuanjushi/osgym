@@ -1,0 +1,21 @@
+{
+  "id": "39a99efd-11a0-470e-b9aa-3353189fa75f",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Save the spreadsheet as a plain text file at /tmp/calc_marker.txt that preserves the cell value 'SENTINEL' from the data.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_calc_file_setup(path='/home/user/Desktop/marker_txt_demo.xlsx', data=[['Tag'], ['SENTINEL'], ['other']])",
+    "_open_setup(path='/home/user/Desktop/marker_txt_demo.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='marker_txt_demo.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "file_contains(get_vm_file(env, config={'path': '/tmp/calc_marker.txt', 'dest': 'calc_marker.txt'}), get_rule(env, config={'rules': {'expected': ['SENTINEL']}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -8,7 +8,7 @@
     "chrome"
   ],
   "evaluator": {
-    "eval": "infeasible(get_(env, config={}))"
+    "eval": "infeasible()"
   },
   "trajectory": "trajectories/"
 }

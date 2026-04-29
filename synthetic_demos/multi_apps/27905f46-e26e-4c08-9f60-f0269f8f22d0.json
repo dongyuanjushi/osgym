@@ -1,0 +1,17 @@
+{
+  "id": "27905f46-e26e-4c08-9f60-f0269f8f22d0",
+  "snapshot": "multi_apps",
+  "instruction": "Copy /home/user/Desktop/notes.txt to /home/user/notes_backup.txt so the backup contains the same content as the source.",
+  "source": "hand-curated demo",
+  "config": [
+    "_command_setup(command=['bash', '-c', \"echo 'meeting notes 2026' > /home/user/Desktop/notes.txt\"])"
+  ],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "file_contains(get_vm_file(env, config={'path': '/home/user/notes_backup.txt', 'dest': 'notes_backup.txt'}), get_rule(env, config={'rules': {'expected': ['meeting notes 2026']}}))"
+  },
+  "trajectory": "trajectories/"
+}

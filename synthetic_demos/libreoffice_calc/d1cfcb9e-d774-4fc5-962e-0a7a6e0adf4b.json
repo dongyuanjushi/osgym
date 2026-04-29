@@ -1,0 +1,23 @@
+{
+  "id": "d1cfcb9e-d774-4fc5-962e-0a7a6e0adf4b",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Add an AVERAGE formula in the row right below the data so the value at the bottom of column A equals the mean of 10, 20, 30 (i.e. 20).",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_calc_file_setup(path='/home/user/Desktop/avg_demo.xlsx', data=[['Value'], [10], [20], [30]], sheet_name='Sheet1')",
+    "_open_setup(path='/home/user/Desktop/avg_demo.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='avg_demo.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); pyautogui.press('enter'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "is_in_list(get_content_from_vm_file(env, config={'path': '/home/user/Desktop/avg_demo.xlsx', 'file_type': 'xlsx', 'file_content': 'last_row'}), get_rule(env, config={'rules': {'expected': 20}}))"
+  },
+  "trajectory": "trajectories/"
+}

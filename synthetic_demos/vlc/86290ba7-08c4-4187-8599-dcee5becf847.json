@@ -1,0 +1,18 @@
+{
+  "id": "86290ba7-08c4-4187-8599-dcee5becf847",
+  "snapshot": "vlc",
+  "instruction": "Disable VLC's privacy-acknowledged prompt on next start by setting qt-privacy-ask=0 in vlcrc.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command='VLC_VERBOSE=-1 vlc --no-audio --no-video-title-show', shell=True)",
+    "_execute_setup(command=['python', '-c', 'import pyautogui; import time; pyautogui.click({SCREEN_WIDTH_HALF}, {SCREEN_HEIGHT_HALF}); time.sleep(0.5);'])"
+  ],
+  "related_apps": [
+    "vlc"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "file_contains(get_vlc_config(env, config={'dest': 'vlcrc'}), get_rule(env, config={'rules': {'expected': ['qt-privacy-ask=0']}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "a3f692da-b527-47a9-b987-b55a41beacb2",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Switch the LibreOffice user-interface locale to English (UK) so the configuration records en-GB.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_writer_file_setup(path='/home/user/Desktop/writer_locale_demo.docx', paragraphs=['Locale toggle demo paragraph.'])",
+    "_open_setup(path='/home/user/Desktop/writer_locale_demo.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='writer_locale_demo.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_libre_locale(get_vm_file(env, config={'path': '/home/user/.config/libreoffice/4/user/registrymodifications.xcu', 'dest': 'registrymodifications.xcu'}), get_rule(env, config={'rules': {'locale_set': ['en-GB', 'en_GB']}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "813c6e50-84be-42a0-9073-ca7a78648610",
+  "snapshot": "gimp",
+  "instruction": "Re-export the image as JPEG at /tmp/large.jpg keeping the file under 200,000 bytes.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_gimp_image_setup(path='/home/user/Desktop/large_demo.png', width=1000, height=800, color=[80, 120, 160])",
+    "_open_setup(path='/home/user/Desktop/large_demo.png')"
+  ],
+  "related_apps": [
+    "gimp"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='GNU Image Manipulation Program', strict=False)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_image_file_size(get_vm_file(env, config={'path': '/tmp/large.jpg', 'dest': 'large.jpg'}), get_rule(env, config={'rules': {'max_size': 200000}}))"
+  },
+  "trajectory": "trajectories/"
+}

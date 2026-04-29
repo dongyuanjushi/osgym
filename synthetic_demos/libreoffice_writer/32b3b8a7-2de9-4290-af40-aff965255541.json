@@ -1,0 +1,21 @@
+{
+  "id": "32b3b8a7-2de9-4290-af40-aff965255541",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Export the open document as a 1-page PDF at /tmp/writer_short.pdf.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_writer_file_setup(path='/home/user/Desktop/writer_short_demo.docx', paragraphs=['Tiny short report.'])",
+    "_open_setup(path='/home/user/Desktop/writer_short_demo.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='writer_short_demo.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_pdf_pages(get_vm_file(env, config={'path': '/tmp/writer_short.pdf', 'dest': 'writer_short.pdf'}), get_rule(env, config={'rules': {'relation': 'eq', 'ref_value': 1}}))"
+  },
+  "trajectory": "trajectories/"
+}

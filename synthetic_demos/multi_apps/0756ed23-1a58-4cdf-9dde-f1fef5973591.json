@@ -1,0 +1,17 @@
+{
+  "id": "0756ed23-1a58-4cdf-9dde-f1fef5973591",
+  "snapshot": "multi_apps",
+  "instruction": "Compute the SHA-256 checksum of /home/user/Desktop/secret.bin and write only the 64-char hex digest to /home/user/Desktop/secret.sha256.",
+  "source": "hand-curated demo",
+  "config": [
+    "_command_setup(command=['bash', '-c', \"printf 'osgym-demo-bytes' > /home/user/Desktop/secret.bin\"])"
+  ],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "exact_match(get_vm_command_line(env, config={'command': \"awk '{print $1}' /home/user/Desktop/secret.sha256 | tr -d '\\\\n'\", 'shell': True}), get_rule(env, config={'rules': {'expected': '62bee50da814c07402b9a89bf45d950da7469e7a1adaf8f220bf2bd57da01f98'}}))"
+  },
+  "trajectory": "trajectories/"
+}

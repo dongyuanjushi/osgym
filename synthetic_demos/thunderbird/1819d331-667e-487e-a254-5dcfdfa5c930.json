@@ -1,0 +1,18 @@
+{
+  "id": "1819d331-667e-487e-a254-5dcfdfa5c930",
+  "snapshot": "thunderbird",
+  "instruction": "Enable BCC-to-self for the default identity in Thunderbird so a copy of every sent message is BCC'd back to me.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['/usr/bin/thunderbird'])",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_thunderbird_prefs(get_vm_file(env, config={'path': '/home/user/.thunderbird/t5q2a5hp.default-release/prefs.js', 'dest': 'thunder-prefs.js'}), get_rule(env, config={'rules': {'expect': {'mail.identity.id1.bcc_self': {'method': 'eq', 'ref': True}}}}))"
+  },
+  "trajectory": "trajectories/"
+}

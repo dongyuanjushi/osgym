@@ -1,0 +1,21 @@
+{
+  "id": "08819677-4d56-4508-b34e-4a3fa3251975",
+  "snapshot": "libreoffice_impress",
+  "instruction": "Export this 4-slide presentation as a PDF at /tmp/impress_four.pdf \u2014 one page per slide (4 pages total).",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_impress_file_setup(path='/home/user/Desktop/impress_four_demo.pptx', slides=[{'title': 'Alpha'}, {'title': 'Beta'}, {'title': 'Gamma'}, {'title': 'Delta'}])",
+    "_open_setup(path='/home/user/Desktop/impress_four_demo.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_impress"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='impress_four_demo.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_pdf_pages(get_vm_file(env, config={'path': '/tmp/impress_four.pdf', 'dest': 'impress_four.pdf'}), get_rule(env, config={'rules': {'relation': 'eq', 'ref_value': 4}}))"
+  },
+  "trajectory": "trajectories/"
+}

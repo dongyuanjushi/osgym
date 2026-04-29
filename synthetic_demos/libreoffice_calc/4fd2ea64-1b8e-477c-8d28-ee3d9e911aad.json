@@ -1,0 +1,21 @@
+{
+  "id": "4fd2ea64-1b8e-477c-8d28-ee3d9e911aad",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Save a CSV at /tmp/calc_alpha.csv that contains the string 'apple' (one of the original cell values).",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_calc_file_setup(path='/home/user/Desktop/alpha_csv_demo.xlsx', data=[['fruit', 'qty'], ['apple', 4], ['banana', 7]])",
+    "_open_setup(path='/home/user/Desktop/alpha_csv_demo.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='alpha_csv_demo.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "file_contains(get_vm_file(env, config={'path': '/tmp/calc_alpha.csv', 'dest': 'calc_alpha.csv'}), get_rule(env, config={'rules': {'expected': ['apple']}}))"
+  },
+  "trajectory": "trajectories/"
+}

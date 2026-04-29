@@ -1,0 +1,18 @@
+{
+  "id": "1296e3a2-7cbc-4cd2-8627-aac3fa9dcc01",
+  "snapshot": "chrome",
+  "instruction": "Set Chrome's default search engine to DuckDuckGo so the active search provider is DuckDuckGo.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "match_in_list(get_default_search_engine(env, config={}), get_rule(env, config={'rules': {'expected': ['DuckDuckGo', 'duckduckgo.com']}}))"
+  },
+  "trajectory": "trajectories/"
+}

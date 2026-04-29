@@ -1,0 +1,23 @@
+{
+  "id": "27f7adfa-fa7b-4e97-87f6-7b1adf384278",
+  "snapshot": "libreoffice_impress",
+  "instruction": "Change the background fill of slide 1 to pure blue (RGB 0, 0, 255) and save the presentation.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_impress_file_setup(path='/home/user/Desktop/blue_bg_demo.pptx', slides=[{'title': 'Slide One', 'content': 'First bullet'}, {'title': 'Slide Two'}])",
+    "_open_setup(path='/home/user/Desktop/blue_bg_demo.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_impress"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='blue_bg_demo.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); pyautogui.press('enter'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "evaluate_presentation_fill_to_rgb_distance(get_vm_file(env, config={'path': '/home/user/Desktop/blue_bg_demo.pptx', 'dest': 'blue_bg_demo.pptx'}), get_rule(env, config={'rules': {'rgb': [0, 0, 255], 'original_rgb': [255, 255, 255]}}))"
+  },
+  "trajectory": "trajectories/"
+}

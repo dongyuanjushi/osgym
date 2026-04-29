@@ -1,0 +1,17 @@
+{
+  "id": "694a2749-2f04-4a83-bf99-2188545634e3",
+  "snapshot": "multi_apps",
+  "instruction": "Combine the contents of /home/user/Desktop/part1.txt and /home/user/Desktop/part2.txt (in that order) into /home/user/Desktop/combined.txt.",
+  "source": "hand-curated demo",
+  "config": [
+    "_command_setup(command=['bash', '-c', \"printf 'header line\\n' > /home/user/Desktop/part1.txt && printf 'body line\\n' > /home/user/Desktop/part2.txt\"])"
+  ],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "file_contains(get_vm_file(env, config={'path': '/home/user/Desktop/combined.txt', 'dest': 'combined.txt'}), get_rule(env, config={'rules': {'expected': ['header line', 'body line']}}))"
+  },
+  "trajectory": "trajectories/"
+}

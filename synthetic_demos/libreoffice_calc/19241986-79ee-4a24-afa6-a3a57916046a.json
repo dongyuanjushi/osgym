@@ -1,0 +1,23 @@
+{
+  "id": "19241986-79ee-4a24-afa6-a3a57916046a",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Add a formula in the last row of column A so the resulting cell equals 84 (the product of the two values 6 and 14 above it).",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_calc_file_setup(path='/home/user/Desktop/product_demo.xlsx', data=[['Value'], [6], [14]], sheet_name='Sheet1')",
+    "_open_setup(path='/home/user/Desktop/product_demo.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='product_demo.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); pyautogui.press('enter'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "is_in_list(get_content_from_vm_file(env, config={'path': '/home/user/Desktop/product_demo.xlsx', 'file_type': 'xlsx', 'file_content': 'last_row'}), get_rule(env, config={'rules': {'expected': 84}}))"
+  },
+  "trajectory": "trajectories/"
+}

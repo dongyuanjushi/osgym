@@ -1,0 +1,21 @@
+{
+  "id": "9fcfb4e2-2cd7-47b5-aef1-4bb3e9c391c0",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Save the spreadsheet in ODF Spreadsheet format at /tmp/calc_export.ods so the file exists at that path.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_calc_file_setup(path='/home/user/Desktop/ods_export_demo.xlsx', data=[['A', 'B'], [1, 2]])",
+    "_open_setup(path='/home/user/Desktop/ods_export_demo.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='ods_export_demo.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "exact_match(get_vm_command_line(env, config={'command': 'test -f /tmp/calc_export.ods && echo yes || echo no', 'shell': True}), get_rule(env, config={'rules': {'expected': 'yes'}}))"
+  },
+  "trajectory": "trajectories/"
+}

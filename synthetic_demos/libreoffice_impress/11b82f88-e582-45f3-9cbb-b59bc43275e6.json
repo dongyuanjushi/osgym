@@ -1,0 +1,23 @@
+{
+  "id": "11b82f88-e582-45f3-9cbb-b59bc43275e6",
+  "snapshot": "libreoffice_impress",
+  "instruction": "Change the background fill of every slide to pure green (RGB 0, 128, 0) and save.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_impress_file_setup(path='/home/user/Desktop/green_bg_demo.pptx', slides=[{'title': 'Cover'}, {'title': 'Body'}])",
+    "_open_setup(path='/home/user/Desktop/green_bg_demo.pptx')"
+  ],
+  "related_apps": [
+    "libreoffice_impress"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='green_bg_demo.pptx - LibreOffice Impress', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); pyautogui.press('enter'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "evaluate_presentation_fill_to_rgb_distance(get_vm_file(env, config={'path': '/home/user/Desktop/green_bg_demo.pptx', 'dest': 'green_bg_demo.pptx'}), get_rule(env, config={'rules': {'rgb': [0, 128, 0], 'original_rgb': [255, 255, 255]}}))"
+  },
+  "trajectory": "trajectories/"
+}

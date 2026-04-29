@@ -1,0 +1,18 @@
+{
+  "id": "3101274a-7814-4a12-8c5f-bc07db9a8637",
+  "snapshot": "thunderbird",
+  "instruction": "Set the default compose-window font size in Thunderbird to 18 pixels.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['/usr/bin/thunderbird'])",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_thunderbird_prefs(get_vm_file(env, config={'path': '/home/user/.thunderbird/t5q2a5hp.default-release/prefs.js', 'dest': 'thunder-prefs.js'}), get_rule(env, config={'rules': {'expect': {'mail.compose.default_font_size': {'method': 'eq', 'ref': 18}}}}))"
+  },
+  "trajectory": "trajectories/"
+}

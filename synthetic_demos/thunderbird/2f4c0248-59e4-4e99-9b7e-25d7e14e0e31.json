@@ -1,0 +1,18 @@
+{
+  "id": "2f4c0248-59e4-4e99-9b7e-25d7e14e0e31",
+  "snapshot": "thunderbird",
+  "instruction": "Configure Thunderbird to mark messages as read after a 3-second delay (3000 ms).",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['/usr/bin/thunderbird'])",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_thunderbird_prefs(get_vm_file(env, config={'path': '/home/user/.thunderbird/t5q2a5hp.default-release/prefs.js', 'dest': 'thunder-prefs.js'}), get_rule(env, config={'rules': {'expect': {'mailnews.mark_message_read.delay.interval': {'method': 'eq', 'ref': 3000}}}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "90ff8a0b-7124-48c8-991e-93d118273add",
+  "snapshot": "thunderbird",
+  "instruction": "Disable the 'New Mail' system sound notification in Thunderbird.",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['/usr/bin/thunderbird'])",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_thunderbird_prefs(get_vm_file(env, config={'path': '/home/user/.thunderbird/t5q2a5hp.default-release/prefs.js', 'dest': 'thunder-prefs.js'}), get_rule(env, config={'rules': {'expect': {'mail.biff.play_sound': {'method': 'eq', 'ref': False}}}}))"
+  },
+  "trajectory": "trajectories/"
+}

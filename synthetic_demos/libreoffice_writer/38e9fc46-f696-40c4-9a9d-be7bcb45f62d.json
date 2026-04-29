@@ -1,0 +1,23 @@
+{
+  "id": "38e9fc46-f696-40c4-9a9d-be7bcb45f62d",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Change the document's default font to 'Times New Roman' and save the file so the .docx records that font as the default.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_writer_file_setup(path='/home/user/Desktop/tnr_font_demo.docx', paragraphs=['First paragraph using the original font.', 'Second paragraph follows.'])",
+    "_open_setup(path='/home/user/Desktop/tnr_font_demo.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='tnr_font_demo.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); pyautogui.press('enter'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "find_default_font(get_vm_file(env, config={'path': '/home/user/Desktop/tnr_font_demo.docx', 'dest': 'tnr_font_demo.docx'}), get_rule(env, config={'rules': {'font_name': 'Times New Roman'}}))"
+  },
+  "trajectory": "trajectories/"
+}

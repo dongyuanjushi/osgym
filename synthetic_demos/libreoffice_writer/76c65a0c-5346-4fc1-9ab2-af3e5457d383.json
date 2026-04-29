@@ -1,0 +1,23 @@
+{
+  "id": "76c65a0c-5346-4fc1-9ab2-af3e5457d383",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Add a final paragraph with the exact text 'Approved by management.' to the document and save it.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_writer_file_setup(path='/home/user/Desktop/approved_demo.docx', paragraphs=['Original first paragraph.', 'Original second paragraph.'])",
+    "_open_setup(path='/home/user/Desktop/approved_demo.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='approved_demo.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); pyautogui.press('enter'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "file_contains(get_vm_command_line(env, config={'command': 'unzip -p /home/user/Desktop/approved_demo.docx word/document.xml', 'shell': True}), get_rule(env, config={'rules': {'expected': ['Approved by management.']}}))"
+  },
+  "trajectory": "trajectories/"
+}

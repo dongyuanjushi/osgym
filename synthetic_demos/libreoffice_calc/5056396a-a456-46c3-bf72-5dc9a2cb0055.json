@@ -1,0 +1,23 @@
+{
+  "id": "5056396a-a456-46c3-bf72-5dc9a2cb0055",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Add a MIN formula in the last row of column A so the row's value matches the minimum of 50, 70, 30, 40 (i.e. 30).",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_calc_file_setup(path='/home/user/Desktop/min_demo.xlsx', data=[['Value'], [50], [70], [30], [40]], sheet_name='Sheet1')",
+    "_open_setup(path='/home/user/Desktop/min_demo.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='min_demo.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); pyautogui.press('enter'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "is_in_list(get_content_from_vm_file(env, config={'path': '/home/user/Desktop/min_demo.xlsx', 'file_type': 'xlsx', 'file_content': 'last_row'}), get_rule(env, config={'rules': {'expected': 30}}))"
+  },
+  "trajectory": "trajectories/"
+}

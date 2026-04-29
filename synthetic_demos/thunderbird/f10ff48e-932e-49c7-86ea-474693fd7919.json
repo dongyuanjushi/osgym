@@ -1,0 +1,18 @@
+{
+  "id": "f10ff48e-932e-49c7-86ea-474693fd7919",
+  "snapshot": "thunderbird",
+  "instruction": "Configure Thunderbird so attachments are checked for in outgoing messages (enable the missing-attachment reminder).",
+  "source": "hand-curated demo",
+  "config": [
+    "_launch_setup(command=['/usr/bin/thunderbird'])",
+    "_sleep_setup(seconds=2)"
+  ],
+  "related_apps": [
+    "thunderbird"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "check_thunderbird_prefs(get_vm_file(env, config={'path': '/home/user/.thunderbird/t5q2a5hp.default-release/prefs.js', 'dest': 'thunder-prefs.js'}), get_rule(env, config={'rules': {'expect': {'mail.compose.attachment_reminder': {'method': 'eq', 'ref': True}}}}))"
+  },
+  "trajectory": "trajectories/"
+}

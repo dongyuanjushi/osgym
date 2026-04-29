@@ -1,0 +1,21 @@
+{
+  "id": "e1d27517-87cd-41e3-ab90-796a5d804302",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Switch the LibreOffice user-interface locale to French (France) so the configuration records fr-FR.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_calc_file_setup(path='/home/user/Desktop/fr_locale_demo.xlsx', data=[['x', 'y'], [1, 2]])",
+    "_open_setup(path='/home/user/Desktop/fr_locale_demo.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='fr_locale_demo.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_libre_locale(get_vm_file(env, config={'path': '/home/user/.config/libreoffice/4/user/registrymodifications.xcu', 'dest': 'registrymodifications.xcu'}), get_rule(env, config={'rules': {'locale_set': ['fr-FR', 'fr_FR']}}))"
+  },
+  "trajectory": "trajectories/"
+}

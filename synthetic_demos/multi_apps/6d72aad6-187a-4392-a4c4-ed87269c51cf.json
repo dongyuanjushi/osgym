@@ -11,7 +11,7 @@
     "vlc"
   ],
   "evaluator": {
-    "eval": "infeasible(get_(env, config={}))"
+    "eval": "infeasible()"
   },
   "trajectory": "trajectories/6d72aad6-187a-4392-a4c4-ed87269c51cf"
 }

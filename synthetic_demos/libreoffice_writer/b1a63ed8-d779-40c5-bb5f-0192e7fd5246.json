@@ -1,0 +1,21 @@
+{
+  "id": "b1a63ed8-d779-40c5-bb5f-0192e7fd5246",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Export the document to a single-page PDF saved at /tmp/writer_export.pdf.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_writer_file_setup(path='/home/user/Desktop/pdf_export_demo.docx', paragraphs=['This is a short note that fits on one page.'])",
+    "_open_setup(path='/home/user/Desktop/pdf_export_demo.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='pdf_export_demo.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "check_pdf_pages(get_vm_file(env, config={'path': '/tmp/writer_export.pdf', 'dest': 'writer_export.pdf'}), get_rule(env, config={'rules': {'relation': 'eq', 'ref_value': 1}}))"
+  },
+  "trajectory": "trajectories/"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "9941c399-4c6e-41d7-be4c-2599dfa312d9",
+  "snapshot": "libreoffice_writer",
+  "instruction": "Save the current document as a plain text file at /tmp/writer_export.txt that contains the substring 'penguin'.",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_writer_file_setup(path='/home/user/Desktop/text_export_demo.docx', paragraphs=['The penguin waddles across the ice.', 'Another paragraph for context.'])",
+    "_open_setup(path='/home/user/Desktop/text_export_demo.docx')"
+  ],
+  "related_apps": [
+    "libreoffice_writer"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='text_export_demo.docx - LibreOffice Writer', strict=True)",
+      "_sleep_setup(seconds=0.5)"
+    ],
+    "eval": "file_contains(get_vm_file(env, config={'path': '/tmp/writer_export.txt', 'dest': 'writer_export.txt'}), get_rule(env, config={'rules': {'expected': ['penguin']}}))"
+  },
+  "trajectory": "trajectories/"
+}

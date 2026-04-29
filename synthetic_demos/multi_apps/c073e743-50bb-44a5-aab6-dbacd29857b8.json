@@ -1,0 +1,17 @@
+{
+  "id": "c073e743-50bb-44a5-aab6-dbacd29857b8",
+  "snapshot": "multi_apps",
+  "instruction": "Create a tar archive of /home/user/Desktop/photos at /tmp/photos.tar so the resulting tarball lists the file 'a.jpg' as one of its entries.",
+  "source": "hand-curated demo",
+  "config": [
+    "_command_setup(command=['bash', '-c', \"mkdir -p /home/user/Desktop/photos && touch /home/user/Desktop/photos/a.jpg /home/user/Desktop/photos/b.jpg\"])"
+  ],
+  "related_apps": [
+    "os"
+  ],
+  "evaluator": {
+    "postconfig": [],
+    "eval": "file_contains(get_vm_command_line(env, config={'command': 'tar -tf /tmp/photos.tar 2>/dev/null', 'shell': True}), get_rule(env, config={'rules': {'expected': ['a.jpg']}}))"
+  },
+  "trajectory": "trajectories/"
+}

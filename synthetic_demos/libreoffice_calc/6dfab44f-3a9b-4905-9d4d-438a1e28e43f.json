@@ -1,0 +1,23 @@
+{
+  "id": "6dfab44f-3a9b-4905-9d4d-438a1e28e43f",
+  "snapshot": "libreoffice_calc",
+  "instruction": "Add a MAX formula in the last row of column A so the row's value matches the max of 5, 12, 9, 7 (i.e. 12).",
+  "source": "hand-curated demo",
+  "config": [
+    "_create_calc_file_setup(path='/home/user/Desktop/max_demo.xlsx', data=[['Value'], [5], [12], [9], [7]], sheet_name='Sheet1')",
+    "_open_setup(path='/home/user/Desktop/max_demo.xlsx')"
+  ],
+  "related_apps": [
+    "libreoffice_calc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_activate_window_setup(window_name='max_demo.xlsx - LibreOffice Calc', strict=True)",
+      "_sleep_setup(seconds=0.5)",
+      "_execute_setup(command=['python', '-c', \"import pyautogui; import time; pyautogui.hotkey('ctrl', 's'); time.sleep(0.5); pyautogui.press('enter'); time.sleep(0.5);\"])",
+      "_sleep_setup(seconds=1)"
+    ],
+    "eval": "is_in_list(get_content_from_vm_file(env, config={'path': '/home/user/Desktop/max_demo.xlsx', 'file_type': 'xlsx', 'file_content': 'last_row'}), get_rule(env, config={'rules': {'expected': 12}}))"
+  },
+  "trajectory": "trajectories/"
+}
