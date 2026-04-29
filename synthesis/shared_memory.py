@@ -478,6 +478,16 @@ class VectorDedupStore:
     # -- writes -------------------------------------------------------------
 
     def add_solvable(self, example: Dict[str, Any], domain: str) -> bool:
+        """Upsert ``example`` into the per-domain dedup collection.
+
+        Embeds the example's instruction and persists it so subsequent
+        ``filter_batch`` calls (in this run or any later run) can detect
+        near-duplicates. Idempotent — repeated calls for the same id
+        overwrite the existing row. Despite the name, the persisted row
+        does not encode solvability; callers may use it to register an
+        example as soon as it passes static validation + dedup so the next
+        synthesis run dedups against everything generated so far.
+        """
         eid = example.get("id")
         if not eid:
             logger.warning("[vector-dedup] skipping add: example has no id")

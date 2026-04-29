@@ -2,7 +2,7 @@
 
 Responsibilities:
   * Discover domains and load reference examples from
-    ``refactored_evaluation_examples/examples/``.
+    ``synthetic_demos/`` (hand-curated, download-free demo tasks).
   * Catalog the setup / getter / metric function libraries the LLM is allowed
     to use.
   * Generate new task examples + verifiers via LLM calls.
@@ -20,6 +20,7 @@ import inspect
 import json
 import logging
 import os
+import random
 import threading
 import traceback
 import uuid
@@ -45,39 +46,17 @@ from .shared_memory import SynthesisMemory, VectorDedupStore
 
 logger = logging.getLogger("desktopenv.synthesis.task_creator")
 
+# Hand-curated demo tasks that the LLM reads as ground-truth references in the
+# TASK_GEN prompt. Each ``<domain>/`` subdirectory holds download-free example
+# tasks that statically pass validation and exercise the most common setup
+# helpers / getters / metrics for that domain. This directory is also used for
+# domain discovery — the synthesis pipeline targets exactly the domains that
+# have a folder here.
 EXAMPLES_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    os.pardir,
-    "refactored_evaluation_examples",
-    "examples",
-)
-
-# Curated demo tasks that the LLM reads as ground-truth references in the
-# TASK_GEN prompt. Each ``<domain>/`` subdirectory holds a small set of
-# hand-vetted example tasks (typically five) that statically pass validation
-# and exercise the most common setup helpers / getters / metrics for that
-# domain. Used as the prompt-context source instead of the larger curated
-# OSWorld example library so the prompt stays focused.
-DEMOS_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     os.pardir,
     "synthetic_demos",
 )
-
-
-def _load_domain_demos(domain: str) -> List[Dict[str, Any]]:
-    """Return the demo tasks for ``domain`` (empty list when none exist)."""
-    domain_dir = os.path.join(DEMOS_DIR, domain)
-    if not os.path.isdir(domain_dir):
-        return []
-    out: List[Dict[str, Any]] = []
-    for fp in sorted(glob.glob(os.path.join(domain_dir, "*.json"))):
-        try:
-            with open(fp, "r") as f:
-                out.append(json.load(f))
-        except Exception as e:  # pragma: no cover — corrupt demo file
-            logger.warning(f"Skipping malformed demo {fp}: {e}")
-    return out
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -262,14 +241,18 @@ def discover_domains() -> List[str]:
 
 
 def load_domain_examples(domain: str, max_examples: int = 0) -> DomainInfo:
-    
+    """Load the curated demo tasks for ``domain`` from ``synthetic_demos/``.
+
+    These hand-vetted examples are the primary reference shown to the LLM in
+    the TASK_GEN prompt. ``max_examples`` randomly samples up to that many
+    files from the demo set; ``0`` (the default) loads them all.
+    """
     domain_dir = os.path.join(EXAMPLES_DIR, domain)
     if not os.path.isdir(domain_dir):
         raise FileNotFoundError(f"Domain directory not found: {domain_dir}")
     info = DomainInfo(name=domain)
     json_files = sorted(glob.glob(os.path.join(domain_dir, "*.json")))
     info.example_files = json_files
-    import random
     to_load = json_files if max_examples <= 0 else random.sample(json_files, max_examples)
     for fp in to_load:
         with open(fp, "r") as f:
@@ -441,16 +424,13 @@ def generate_task_examples(
     parallel mode so the read happens atomically with respect to concurrent
     ``memory.record`` calls); otherwise it is derived from ``memory`` here.
     """
-    # Curated demos are the LLM's primary source of correct call patterns —
-    # they showcase how to pair file-creation setup with `_open_setup`, how
-    # to populate `get_vm_file(env, config={'path':..., 'dest':...})` with
-    # both required keys, and how to emit rules dicts that match the metric's
-    # schema. Fall back to a slice of the legacy curated OSWorld examples if
-    # no demo file exists for the domain so the prompt isn't empty.
-    demos = _load_domain_demos(domain_info.name)
-    if not demos:
-        demos = domain_info.examples[:5]
-    ref = json.dumps(demos[:5], indent=2)
+    # Curated demos (loaded from ``synthetic_demos/<domain>/``) are the LLM's
+    # primary source of correct call patterns — they showcase how to pair
+    # file-creation setup with `_open_setup`, how to populate
+    # `get_vm_file(env, config={'path':..., 'dest':...})` with both required
+    # keys, and how to emit rules dicts that match the metric's schema.
+    demos = domain_info.examples[:5]
+    ref = json.dumps(demos, indent=2)
 
     # Build memory context (empty string if no prior experience). If the
     # caller supplied ``memory_block`` directly, use it verbatim — that path
@@ -504,7 +484,7 @@ def generate_task_examples(
         f"prompt.\n"
         f"Return a JSON array of task objects (no markdown fences)."
     )
-    breakpoint()
+    # breakpoint()
     messages = [
         {"role": "system", "content": TASK_GEN_SYSTEM},
         {"role": "user", "content": user},
@@ -522,10 +502,14 @@ def generate_task_examples(
     # in an otherwise valid response are dropped with a warning.
     last_failure = ""
     for attempt in range(1, _LLM_GENERATION_RETRIES + 1):
+        # Randomize temperature per attempt so retries (and successive batches)
+        # explore a wider distribution; this fights mode collapse on smaller
+        # models that otherwise emit near-identical task lists across calls.
+        temperature = random.uniform(0.6, 1.0)
         try:
             raw = call_llm_with_single_response(
                 messages=messages, llm_config=llm_config,
-                max_tokens=8000, temperature=0.7,
+                max_tokens=8000, temperature=temperature,
             )
         except Exception as e:
             last_failure = f"LLM call raised {type(e).__name__}: {e}"
@@ -542,7 +526,7 @@ def generate_task_examples(
                 f"'{domain_info.name}': {last_failure}"
             )
             continue
-        logger.info(f"LLM response: {len(raw)} chars")
+        logger.info(f"LLM response (T={temperature:.2f}): {len(raw)} chars")
 
         try:
             parsed = parse_json_response(raw)
@@ -1497,6 +1481,8 @@ def _synthesize_domain(
             n_this_batch, args.max_steps,
             memory=None, memory_block=memory_block,
         )
+        
+        # breakpoint()
 
         # 1) Static validation (pure CPU work — runs outside the lock)
         batch_valid: List[Dict[str, Any]] = []
@@ -1533,7 +1519,24 @@ def _synthesize_domain(
             batch_valid = decision.accepted
             duplicates = decision.rejected
 
-        # 3) Persist accepted examples to disk (unique filenames per id, so
+        # 3) Persist accepted examples to the vector store BEFORE writing
+        #    them to disk, so the next batch (and the next run) can dedup
+        #    against them. Without this step the Chroma collection only grows
+        #    after verification, which means --mode synthesize runs never
+        #    persist anything and re-running the script regenerates
+        #    near-duplicates of what was already produced.
+        if vector_store is not None and batch_valid:
+            added = 0
+            with hold():
+                for ex in batch_valid:
+                    if vector_store.add_solvable(ex, domain):
+                        added += 1
+            logger.info(
+                f"[vector-dedup] persisted {added}/{len(batch_valid)} "
+                f"accepted example(s) for domain '{domain}'"
+            )
+
+        # 4) Persist accepted examples to disk (unique filenames per id, so
         #    no cross-thread file collision — runs outside the lock).
         for ex in batch_valid:
             path = os.path.join(domain_dir, f"{ex['id']}.json")
@@ -1541,7 +1544,7 @@ def _synthesize_domain(
                 json.dump(ex, f, indent=2)
             logger.info(f"Saved {path}")
 
-        # 4) Verification first — gather results before touching memory.
+        # 5) Verification first — gather results before touching memory.
         #    Locked because _process_verify_results does a read-modify-write
         #    on verification_results.json / solvable manifest, and pushes
         #    new entries into the vector store; concurrent calls would
@@ -1561,7 +1564,7 @@ def _synthesize_domain(
                     "(rerun --mode verify to pick it up)."
                 )
 
-        # 5) Memory record + persist (single pass, after verification).
+        # 6) Memory record + persist (single pass, after verification).
         #    memory.save() rewrites the whole JSON file, so this whole block
         #    must be atomic w.r.t. peer threads.
         if memory is not None:
