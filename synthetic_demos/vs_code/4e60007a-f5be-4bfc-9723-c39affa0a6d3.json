@@ -1,0 +1,17 @@
+{
+  "id": "4e60007a-f5be-4bfc-9723-c39affa0a6d3",
+  "snapshot": "vscode",
+  "instruction": "Please help me install the autoDocstring extension in VS Code.",
+  "source": "https://campbell-muscle-lab.github.io/howtos_Python/pages/documentation/best_practices/vscode_docstring_extension/vscode_docstring_extension.html#:~:text=Type%2C%20Ctrl%20%2B%20Shift%20%2B%20P,select%20the%20NumPy%20docstring%20format.",
+  "config": [
+    "_launch_setup(command=['code'])",
+    "_activate_window_setup(window_name='Visual Studio Code')"
+  ],
+  "related_apps": [
+    "vscode"
+  ],
+  "evaluator": {
+    "eval": "is_extension_installed(get_vm_command_line(env, config={'command': ['code', '--list-extensions', '|', 'grep', 'njpwerner.autodocstring']}), get_rule(env, config={'rules': {'type': 'contain', 'expected': 'njpwerner.autodocstring'}}))"
+  },
+  "trajectory": "trajectories/4e60007a-f5be-4bfc-9723-c39affa0a6d3"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "982d12a5-beab-424f-8d38-d2a48429e511",
+  "snapshot": "vscode",
+  "instruction": "Please help me change the color theme of VS Code to Visual Studio Dark.",
+  "source": "https://www.youtube.com/watch?v=ORrELERGIHs",
+  "config": [
+    "_command_setup(command='SETTINGS_PATH=\"$HOME/.config/Code/User/settings.json\"; [ ! -f \"$SETTINGS_PATH\" ] && echo \\'{\"workbench.colorTheme\": \"Red\"}\\' > \"$SETTINGS_PATH\" || (grep -q \"workbench.colorTheme\" \"$SETTINGS_PATH\" && sed -i \\'s/\"workbench.colorTheme\": \"[^\"]*\"/\"workbench.colorTheme\": \"Red\"/\\' \"$SETTINGS_PATH\" || jq \\'. + {\"workbench.colorTheme\": \"Red\"}\\' \"$SETTINGS_PATH\" > temp.json && mv temp.json \"$SETTINGS_PATH\")', shell=True)",
+    "_launch_setup(command=['code'])",
+    "_activate_window_setup(window_name='Visual Studio Code')"
+  ],
+  "related_apps": [
+    "vscode"
+  ],
+  "evaluator": {
+    "eval": "compare_config(get_vm_file(env, config={'path': '/home/user/.config/Code/User/settings.json', 'dest': 'settings.json'}), get_rule(env, config={'rules': {'expected': '{\"workbench.colorTheme\": \"Visual Studio Dark\"}\\n'}}))"
+  },
+  "trajectory": "trajectories/982d12a5-beab-424f-8d38-d2a48429e511"
+}

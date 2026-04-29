@@ -1,0 +1,19 @@
+{
+  "id": "da46d875-6b82-4681-9284-653b0c7ae241",
+  "snapshot": "chrome",
+  "instruction": "Book an appointment to apply for a transportation access pass at the Charlie Card store on the first Monday eight months later, 10:15 am, fill in my details (James Smith, james.smith@gmail.com). And do not click \"book\" directly. Let me review it.",
+  "source": "test_task_2",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://www.mbta.com/'])",
+    "_activate_window_setup(window_name='Google Chrome')"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "is_expected_url_pattern_match(get_active_tab_info(env, config={}), get_rule(env, config={'rules': {'expected': ['book/CharlieCardStoreAppointments@mbta.com/']}})) and check_direct_json_object(get_active_tab_html_parse(env, config={'category': 'class', 'class_multiObject_only_child': {'HAZ16': {'0': 'content', '1': 'time'}}}), get_rule_relativeTime()) and check_direct_json_object(get_active_tab_html_parse(env, config={'category': 'input', 'inputObject': {'/html/body/div[2]/div/form/div[7]/div/div/div[1]/input[1]': 'name', '/html/body/div[2]/div/form/div[7]/div/div/div[1]/input[2]': 'mail'}}), get_rule(env, config={'rules': {'expected': {'name': 'James Smith', 'mail': 'james.smith@gmail.com'}}}))"
+  },
+  "trajectory": "trajectories/"
+}

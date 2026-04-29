@@ -1,0 +1,20 @@
+{
+  "id": "ea98c5d7-3cf9-4f9b-8ad3-366b58e0fcae",
+  "snapshot": "vscode",
+  "instruction": "Please help me remove the shortcut \"ctrl+f\" for Tree view Find (Explorer search) in VS Code Explorer view to avoid shortcut conflict.",
+  "source": [
+    "https://superuser.com/questions/1748097/vs-code-disable-tree-view-find-explorer-search",
+    "https://superuser.com/questions/1417361/how-to-disable-file-filtering-in-vs-code-sidebar-explorer?rq=1"
+  ],
+  "config": [
+    "_launch_setup(command=['code'])",
+    "_activate_window_setup(window_name='Visual Studio Code')"
+  ],
+  "related_apps": [
+    "vscode"
+  ],
+  "evaluator": {
+    "eval": "check_json_keybindings(get_vm_file(env, config={'path': '/home/user/.config/Code/User/keybindings.json', 'dest': 'keybindings.json'}), get_rule(env, config={'rules': {'expected': {'key': 'ctrl+f', 'command': '-list.find', 'when': 'listFocus && listSupportsFind'}}}))"
+  },
+  "trajectory": "trajectories/"
+}

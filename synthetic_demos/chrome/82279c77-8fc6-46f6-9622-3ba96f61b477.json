@@ -1,0 +1,19 @@
+{
+  "id": "82279c77-8fc6-46f6-9622-3ba96f61b477",
+  "snapshot": "chrome",
+  "instruction": "Find electric cars with a maximum price of $50,000 within 50 miles of 10001.",
+  "source": "test_task_1",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://www.cars.com/'])",
+    "_activate_window_setup(window_name='Google Chrome')"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "check_direct_json_object(get_active_tab_url_parse(env, config={'goto_prefix': 'https://www.', 'parse_keys': ['list_price_max', 'maximum_distance', 'zip', 'fuel_slugs[]']}), get_rule(env, config={'rules': {'expected': {'list_price_max': '50000', 'maximum_distance': '50', 'zip': '10001', 'fuel_slugs[]': 'electric'}}}))"
+  },
+  "trajectory": "trajectories/"
+}

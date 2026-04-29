@@ -1,0 +1,19 @@
+{
+  "id": "b4f95342-463e-4179-8c3f-193cd7241fb2",
+  "snapshot": "chrome",
+  "instruction": "Find the Next Available dates for Diamond.",
+  "source": "test_task_1",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://www.recreation.gov/'])",
+    "_activate_window_setup(window_name='Google Chrome')"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "check_direct_json_object(get_active_tab_html_parse(env, config={'goto_prefix': 'https://www.', 'category': 'class', 'class_singleObject': {}, 'class_multiObject': {'camp-sortable-column-header': {'2': 'camp-sortable-column-header'}}}), get_gotoRecreationPage_and_get_html_content(env, config={'selector': 'class', 'class': 'camp-sortable-column-header', 'order': '2'}))"
+  },
+  "trajectory": "trajectories/"
+}

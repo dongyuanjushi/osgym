@@ -1,0 +1,24 @@
+{
+  "id": "9656a811-9b5b-4ddf-99c7-5117bcef0626",
+  "snapshot": "chrome",
+  "instruction": "I want Chrome to warn me whenever I visit a potentially harmful or unsafe website. Can you enable this safety feature?",
+  "source": "https://www.quora.com/How-do-I-set-the-security-settings-for-the-Google-Chrome-browser-for-the-best-security#:~:text=Enable%20Safe%20Browsing:%20Chrome%20has%20a%20built%2Din,Security%20%3E%20Security%20%3E%20Enable%20Safe%20Browsing.",
+  "config": [
+    "_execute_setup(command='echo {CLIENT_PASSWORD} | sudo -S apt update -y && echo {CLIENT_PASSWORD} | sudo -S apt install jq -y', shell=True)",
+    "_execute_setup(command='mkdir -p /home/user/.config/google-chrome/Default && if [ ! -f /home/user/.config/google-chrome/Default/Preferences ]; then echo \\'{}\\' > /home/user/.config/google-chrome/Default/Preferences; fi && cd /home/user/.config/google-chrome/Default && jq \\'. + {\"safebrowsing\":{\"enabled\":false,\"enhanced\":false}}\\' Preferences > temp && mv temp Preferences', shell=True)",
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_launch_setup(command=['pkill', 'chrome'])",
+      "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+      "_sleep_setup(seconds=3)"
+    ],
+    "eval": "exact_match(get_enable_safe_browsing(env, config={}), get_rule(env, config={'rules': {'expected': 'true'}}))"
+  },
+  "trajectory": "trajectories/"
+}

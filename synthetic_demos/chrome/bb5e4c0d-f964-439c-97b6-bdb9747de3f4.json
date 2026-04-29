@@ -1,0 +1,22 @@
+{
+  "id": "bb5e4c0d-f964-439c-97b6-bdb9747de3f4",
+  "snapshot": "chrome",
+  "instruction": "Can you make Bing the main search engine when I look stuff up on the internet?",
+  "source": "https://support.google.com/chrome/answer/95426?sjid=16867045591165135686-AP",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_launch_setup(command=['pkill', 'chrome'])",
+      "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+      "_sleep_setup(seconds=3)"
+    ],
+    "eval": "match_in_list(get_default_search_engine(env, config={}), get_rule(env, config={'rules': {'expected': ['Microsoft Bing', 'Bing']}}))"
+  },
+  "trajectory": "trajectories/"
+}

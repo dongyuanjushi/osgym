@@ -1,0 +1,23 @@
+{
+  "id": "7b6c7e24-c58a-49fc-a5bb-d57b80e5b4c3",
+  "snapshot": "chrome",
+  "instruction": "Can you help me clean up my computer by getting rid of all the tracking things that Amazon might have saved? I want to make sure my browsing is private and those sites don't remember me.",
+  "source": "https://support.google.com/chrome/answer/95647?hl=en&ref_topic=7438325&sjid=16867045591165135686-AP#zippy=%2Cdelete-cookies-from-a-site",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://www.amazon.com', 'https://www.amazon.com/s?k=huggingface+transformers+book'])"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_launch_setup(command=['pkill', 'chrome'])",
+      "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+      "_sleep_setup(seconds=3)"
+    ],
+    "eval": "is_cookie_deleted(get_cookie_data(env, config={'dest': 'Cookies'}), get_rule(env, config={'rules': {'type': 'domains', 'domains': ['.amazon.com']}}))"
+  },
+  "trajectory": "trajectories/"
+}

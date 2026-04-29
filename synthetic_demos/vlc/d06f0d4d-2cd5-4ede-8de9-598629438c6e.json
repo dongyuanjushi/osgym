@@ -1,0 +1,21 @@
+{
+  "id": "d06f0d4d-2cd5-4ede-8de9-598629438c6e",
+  "snapshot": "chrome",
+  "instruction": "Can you change the color of the volume slider to black-ish color? I often use the player in a low-light environment, and a darker color scheme would be less straining on my eyes, especially during nighttime usage.",
+  "source": "https://superuser.com/questions/1039392/changing-colour-of-vlc-volume-slider",
+  "config": [
+    "_launch_setup(command='VLC_VERBOSE=-1 vlc --no-audio --no-video-title-show', shell=True)",
+    "_execute_setup(command=['python', '-c', 'import pyautogui; import time; pyautogui.click({SCREEN_WIDTH_HALF}, {SCREEN_HEIGHT_HALF}); time.sleep(0.5);'])"
+  ],
+  "related_apps": [
+    "vlc"
+  ],
+  "evaluator": {
+    "postconfig": [
+      "_launch_setup(command=['pkill', 'vlc'])",
+      "_launch_setup(command='vlc --no-audio --no-video-title-show', shell=True)"
+    ],
+    "eval": "check_qt_slider_colours(get_vlc_config(env, config={'dest': 'vlcrc'}), get_rule(env, config={'rules': {'type': 'blackish'}}))"
+  },
+  "trajectory": "trajectories/"
+}

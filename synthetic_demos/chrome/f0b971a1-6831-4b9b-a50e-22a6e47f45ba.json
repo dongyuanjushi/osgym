@@ -1,0 +1,19 @@
+{
+  "id": "f0b971a1-6831-4b9b-a50e-22a6e47f45ba",
+  "snapshot": "chrome",
+  "instruction": "Please help me find the score record for the 2019 Super Bowl in the NFL website.",
+  "source": "Mind2Web",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_chrome_open_tabs_setup(urls_to_open=['https://www.nfl.com/'])",
+    "_activate_window_setup(window_name='Google Chrome')"
+  ],
+  "related_apps": [
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "is_expected_active_tab(get_active_url_from_accessTree(env, config={'goto_prefix': 'https://www.'}), get_rule(env, config={'rules': {'type': 'url', 'url': 'https://www.nfl.com/scores/2019/post4'}}))"
+  },
+  "trajectory": "trajectories/"
+}

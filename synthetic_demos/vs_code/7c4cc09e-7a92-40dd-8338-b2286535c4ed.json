@@ -1,0 +1,17 @@
+{
+  "id": "7c4cc09e-7a92-40dd-8338-b2286535c4ed",
+  "snapshot": "vscode",
+  "instruction": "Please help me change the display language of VS Code to \"Arabic\" without using any extensions.",
+  "source": "",
+  "config": [
+    "_launch_setup(command=['code'])",
+    "_activate_window_setup(window_name='Visual Studio Code')"
+  ],
+  "related_apps": [
+    "vscode"
+  ],
+  "evaluator": {
+    "eval": "infeasible(get_(env, config={}))"
+  },
+  "trajectory": "trajectories/"
+}

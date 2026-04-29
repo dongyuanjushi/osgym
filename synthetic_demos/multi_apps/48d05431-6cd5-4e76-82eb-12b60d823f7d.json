@@ -1,0 +1,20 @@
+{
+  "id": "48d05431-6cd5-4e76-82eb-12b60d823f7d",
+  "snapshot": "os",
+  "instruction": "When I ran \"conda install datasets\" in terminal, I got \"conda: command not found\". Could you help me solve it so that I can use conda command right away?",
+  "source": "authors",
+  "config": [
+    "_launch_setup(command=['google-chrome', '--remote-debugging-port=1337'])",
+    "_launch_setup(command=['socat', 'tcp-listen:9222,fork', 'tcp:localhost:1337'])",
+    "_execute_setup(command=['python', '-c', \"import pyautogui; import time; time.sleep(0.5); pyautogui.click({SCREEN_WIDTH_HALF}, {SCREEN_HEIGHT_HALF}); time.sleep(0.5); pyautogui.hotkey('ctrl', 'alt', 't'); time.sleep(0.5)\"])",
+    "_activate_window_setup(window_name='Terminal')"
+  ],
+  "related_apps": [
+    "os",
+    "chrome"
+  ],
+  "evaluator": {
+    "eval": "exact_match(get_vm_command_line(env, config={'command': \"grep -q 'conda initialize' ~/.bashrc && echo 1 || echo 0\", 'shell': True}), get_rule(env, config={'rules': {'expected': '1\\n'}}))"
+  },
+  "trajectory": "trajectories/48d05431-6cd5-4e76-82eb-12b60d823f7d"
+}

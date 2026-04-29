@@ -1,0 +1,17 @@
+{
+  "id": "eabc805a-bfcf-4460-b250-ac92135819f6",
+  "snapshot": "vscode",
+  "instruction": "Please help me install the extension Python in VS Code.",
+  "source": "https://www.youtube.com/watch?v=VqCgcpAypFQ",
+  "config": [
+    "_launch_setup(command=['code'])",
+    "_activate_window_setup(window_name='Visual Studio Code')"
+  ],
+  "related_apps": [
+    "vscode"
+  ],
+  "evaluator": {
+    "eval": "is_extension_installed(get_vm_command_line(env, config={'command': ['code', '--list-extensions', '|', 'grep', 'ms-python.python']}), get_rule(env, config={'rules': {'type': 'contain', 'expected': 'ms-python.python'}}))"
+  },
+  "trajectory": "trajectories/eabc805a-bfcf-4460-b250-ac92135819f6"
+}
