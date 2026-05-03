@@ -24,9 +24,11 @@ import logging
 import os
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 import requests
+
+import random
 
 logger = logging.getLogger("desktopenv.synthesis.shared_memory")
 
@@ -139,6 +141,12 @@ class SynthesisMemory:
                 verification_failure_reasons.append(
                     f"Verification raised an error while running on the VM: {error}"
                 )
+            elif (code_result or {}).get("mode") == "relevance_skip":
+                rel_reason = (code_result or {}).get("relevance_reason") or "no reason given"
+                verification_failure_reasons.append(
+                    f"Evaluator does not capture the instruction's intent — "
+                    f"skipped before allocating a VM ({rel_reason})"
+                )
             elif solvable is False:
                 verification_failure_reasons.append(
                     "Verification ran without errors but the resulting state "
@@ -171,7 +179,7 @@ class SynthesisMemory:
 
     # -- prompt formatting --------------------------------------------------
 
-    def format_for_prompt(self, domain: str, max_entries: int = 500) -> str:
+    def format_for_prompt(self, domain: str, max_entries: int = 50) -> str:
         """Return a text block summarising past experience for *domain*,
         suitable for injection into the LLM user prompt."""
         domain_entries = self.get_domain_entries(domain)
@@ -186,81 +194,81 @@ class SynthesisMemory:
         not_executable = [e for e in domain_entries if not e.get("executable")]
 
         lines: List[str] = []
-        lines.append(
-            f"## Past synthesis experience for \"{domain}\" "
-            f"({len(solvable)} solvable, {len(executable_only)} executable-only, "
-            f"{len(not_executable)} not-executable)\n"
-        )
+        # lines.append(
+        #     f"## Past synthesis experience for \"{domain}\" "
+        #     f"({len(solvable)} solvable, {len(executable_only)} executable-only, "
+        #     f"{len(not_executable)} not-executable)\n"
+        # )
 
         # --- Solvable tasks: show instruction so LLM avoids duplicates ---
+        # breakpoint()
+        
         if solvable:
             lines.append("### Previously SOLVABLE tasks (do NOT generate similar ones):")
-            for e in solvable[-max_entries:]:
+            for e in random.sample(solvable, min(max_entries, len(solvable))):
                 lines.append(f"  - \"{e['instruction']}\"")
             lines.append("")
 
         # --- Executable but not solvable: valid scripts, agent failed ---
         if executable_only:
             lines.append(
-                "### Previously EXECUTABLE but NOT SOLVABLE tasks "
-                "(valid scripts, agent/verifier execution did not satisfy the metric):"
+                "### Previously EXECUTABLE tasks (The scripts are valid for reference but do not generate similar tasks):"
             )
-            for e in executable_only[-max_entries:]:
-                reasons = "; ".join(
-                    e.get("verification_failure_reasons") or ["unknown"]
-                )
+            for e in random.sample(executable_only, min(max_entries, len(executable_only))):
+                # reasons = "; ".join(
+                #     e.get("verification_failure_reasons") or ["unknown"]
+                # )
                 lines.append(
                     f"  - \"{e['instruction']}\"\n"
-                    f"    evaluator: {e.get('evaluator_eval', 'n/a')[:100]}\n"
-                    f"    verification_failure: {reasons}"
+                    f"    evaluator: {e.get('evaluator_eval', 'n/a')}\n"
+                    # f"    verification_failure: {reasons}"
                 )
             lines.append("")
 
         # --- Not executable: invalid scripts ---
         if not_executable:
             lines.append(
-                "### Previously NOT EXECUTABLE tasks "
-                "(invalid scripts — learn from these):"
+                "### Previously NOT EXECUTABLE tasks (invalid scripts — learn from the mistakes):"
             )
-            for e in not_executable[-max_entries:]:
+            for e in random.sample(not_executable, min(max_entries, len(not_executable))):
                 reasons = "; ".join(
                     e.get("execution_failure_reasons") or ["unknown"]
                 )
                 lines.append(
                     f"  - \"{e['instruction']}\"\n"
-                    f"    evaluator: {e.get('evaluator_eval', 'n/a')[:100]}\n"
+                    f"    evaluator: {e.get('evaluator_eval', 'n/a')}\n"
                     f"    execution_failure: {reasons}"
                 )
             lines.append("")
 
         # --- Aggregate failure patterns from all non-solvable entries ---
-        failed_entries = executable_only + not_executable
-        if failed_entries:
-            failure_keywords: Dict[str, int] = {}
-            for e in failed_entries:
-                reasons = (
-                    (e.get("execution_failure_reasons") or [])
-                    + (e.get("verification_failure_reasons") or [])
-                )
-                for r in reasons:
-                    if "error=" in r:
-                        err = r.split("error=")[-1][:60]
-                    else:
-                        err = r[:60]
-                    failure_keywords[err] = failure_keywords.get(err, 0) + 1
-            if failure_keywords:
-                lines.append("### Common failure patterns (avoid these):")
-                for kw, cnt in sorted(failure_keywords.items(), key=lambda x: -x[1])[:10]:
-                    lines.append(f"  - ({cnt}x) {kw}")
-                lines.append("")
+        # failed_entries = executable_only + not_executable
+        # if failed_entries:
+        #     failure_keywords: Dict[str, int] = {}
+        #     for e in failed_entries:
+        #         reasons = (
+        #             (e.get("execution_failure_reasons") or [])
+        #             + (e.get("verification_failure_reasons") or [])
+        #         )
+        #         for r in reasons:
+        #             if "error=" in r:
+        #                 err = r.split("error=")[-1][:60]
+        #             else:
+        #                 err = r[:60]
+        #             failure_keywords[err] = failure_keywords.get(err, 0) + 1
+        #     if failure_keywords:
+        #         lines.append("### Common failure patterns (avoid these):")
+        #         for kw, cnt in sorted(failure_keywords.items(), key=lambda x: -x[1])[:10]:
+        #             lines.append(f"  - ({cnt}x) {kw}")
+        #         lines.append("")
 
-        # --- Coverage summary ---
-        all_instructions = [e["instruction"] for e in domain_entries]
-        if all_instructions:
-            lines.append(
-                f"### Coverage: {len(all_instructions)} tasks generated so far. "
-                f"Explore UI areas and menu paths NOT yet covered above.\n"
-            )
+        # # --- Coverage summary ---
+        # all_instructions = [e["instruction"] for e in domain_entries]
+        # if all_instructions:
+        #     lines.append(
+        #         f"### Coverage: {len(all_instructions)} tasks generated so far. "
+        #         f"Explore UI areas and menu paths NOT yet covered above.\n"
+        #     )
 
         return "\n".join(lines)
 
@@ -576,23 +584,25 @@ def build_vector_store(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# DedupHistory - per-domain rolling list of dedup-rejection messages
+# DedupHistory - per-domain rolling set of dedup-rejection messages
 # ═══════════════════════════════════════════════════════════════════════════
 
 
 class DedupHistory:
-    """Thread-safe per-domain rolling list of dedup-rejection messages.
+    """Thread-safe per-domain set of dedup-rejection messages.
 
-    Every batch ``extend``s its own domain's list with the rejection
-    messages produced by ``VectorDedupStore.filter_batch``; the list is
-    capped at ``max_per_domain`` entries (default 100) and the oldest
-    rejections are evicted FIFO when the cap is exceeded. The next batch
-    for that domain reads ``format_for_prompt(domain)`` and surfaces the
-    accumulated list to the LLM so the model can see *every* recent
-    near-duplicate it should avoid emitting again — not just the previous
-    batch's rejections.
+    Every batch ``extend``s its own domain's set with the rejection
+    messages produced by ``VectorDedupStore.filter_batch``; each message
+    is inserted via ``set.add()`` so repeats from one batch to the next
+    are silently collapsed and the set only ever grows by *unique*
+    instructions. The set is capped at ``max_per_domain`` entries
+    (default 100); when the cap is exceeded, arbitrary elements are
+    popped to bound memory and prompt length. The next batch for that
+    domain reads ``format_for_prompt(domain)`` and surfaces the
+    accumulated set to the LLM so the model can see every distinct
+    near-duplicate it should avoid emitting again.
 
-    Each domain has its own list; rejections from one domain do not bleed
+    Each domain has its own set; rejections from one domain do not bleed
     into another. The instruction text itself is stored verbatim and is
     domain-agnostic, so the prompt block contains no domain tags.
     """
@@ -601,38 +611,40 @@ class DedupHistory:
         if max_per_domain <= 0:
             raise ValueError("max_per_domain must be positive")
         self.max_per_domain = max_per_domain
-        self._by_domain: Dict[str, List[str]] = {}
+        self._by_domain: Dict[str, Set[str]] = {}
         self._lock = threading.Lock()
 
     def extend(self, domain: str, messages: List[str]) -> None:
-        """Append ``messages`` to ``domain``'s list, FIFO-trimming to the cap."""
+        """Add ``messages`` to ``domain``'s set via ``set.add()``.
+
+        Each message is inserted individually so duplicates already in
+        the set are no-ops. When the resulting set exceeds the cap,
+        arbitrary elements are popped until it fits.
+        """
         if not messages:
             return
         with self._lock:
-            buf = self._by_domain.setdefault(domain, [])
-            buf.extend(messages)
-            if len(buf) > self.max_per_domain:
-                # Drop the oldest entries so the list is bounded by the cap.
-                del buf[: len(buf) - self.max_per_domain]
+            buf = self._by_domain.setdefault(domain, set())
+            for m in messages:
+                buf.add(m)
+            while len(buf) > self.max_per_domain:
+                buf.pop()
 
-    def snapshot(self, domain: str) -> List[str]:
-        """Return a copy of ``domain``'s list (safe to render outside the lock)."""
+    def snapshot(self, domain: str) -> Set[str]:
+        """Return a copy of ``domain``'s set (safe to render outside the lock)."""
         with self._lock:
-            return list(self._by_domain.get(domain, []))
+            return set(self._by_domain.get(domain, set()))
 
     def format_for_prompt(self, domain: str) -> str:
-        """Render ``domain``'s list as a user-prompt block; empty when none."""
+        """Render ``domain``'s set as a user-prompt block; empty when none."""
         snap = self.snapshot(domain)
         if not snap:
             return ""
         lines = [
-            f"## Already-flagged near-duplicates "
-            f"(last {len(snap)} rejection(s) for this domain)",
-            "The following candidate task(s) were rejected in earlier "
-            "synthesis rounds because they were near-duplicates of tasks "
-            "already on file. Do NOT emit anything similar in this batch — "
-            "pick a different feature, menu path, or observable state change.",
+            "Avoid generating the tasks in the following list: "
         ]
         for m in snap:
             lines.append(f"  - {m}")
+        lines.append("Pick a different feature, menu path, or observable state change to generate tasks. ")
+        
         return "\n".join(lines) + "\n"

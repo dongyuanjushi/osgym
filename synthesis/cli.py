@@ -25,7 +25,8 @@ import sys
 from typing import Optional
 
 from .shared_memory import SynthesisMemory, VectorDedupStore, build_vector_store
-from .task_creator import EXAMPLES_DIR, discover_domains, run_synthesize
+from .task_creator import run_synthesize
+from .utils import EXAMPLES_DIR, discover_domains
 from .verifier import run_verify, terminate_workers, verify_examples
 
 logger = logging.getLogger("desktopenv.synthesis")

@@ -1,29 +1,27 @@
-"""Verification: two-stage LLM-routed action against synthesized tasks.
+"""Verification: GUI-only execution of synthesized tasks, gated by an LLM
+relevance check on the evaluator.
 
-Workers POST to the OSGym API server (``main.py``) to allocate a VM, then
-run a two-stage decision pipeline per example:
+Each example is verified in two passes:
 
-* **Stage 1 — route.** A small LLM call sees the task, the verifier
-  expression, and the post-reset screenshot, and returns
-  ``{"mode": "code"|"gui", "reason": ...}``. The router prompt strongly
-  prefers ``code`` and only picks ``gui`` when no programmatic path exists.
+* **Pass 1 — relevance.** A small LLM call sees the instruction together with
+  the evaluator's ``postconfig`` and ``eval`` expression and answers whether
+  the evaluator actually inspects the substantive state the instruction
+  names. The prompt (``RELEVANCE_CHECK_SYSTEM``) flags the common synthesis
+  failure mode where the eval checks a superficial proxy (e.g. file
+  existence / image dimensions) while the instruction asks for a content
+  change (e.g. apply a filter, add a stroke). Examples ruled irrelevant
+  short-circuit: no VM is allocated, no agent is launched, and the result is
+  recorded as not-solvable with the rationale attached.
 
-* **Stage 2 — execute.** Branches on the chosen mode:
-    - ``code`` → second LLM call with ``CODE_VERIFIER_SYSTEM`` produces a
-      ``\`\`\`python ... \`\`\`` snippet that gets sent to ``/step``.
-    - ``gui``  → ``mm_agents.qwen35_vl.Qwen35VLAgent.predict`` produces one
-      pyautogui command (click/type/key/...) that gets sent to ``/step``.
+* **Pass 2 — execute.** For relevance-passing examples the OSGym API server
+  (``main.py``) is asked to allocate a VM. ``Qwen35VLAgent.predict`` then
+  drives the GUI for up to ``max_steps`` predict→/step iterations, mirroring
+  ``lib_run_single.run_single_example``. After the loop ``/evaluate`` returns
+  the reward.
 
-The two Stage 2 paths are mutually exclusive — the code stage cannot emit
-GUI input simulation, and the gui stage cannot run code. After Stage 2
-runs, ``/evaluate`` returns the reward. The mode chosen by the router is
-recorded on the result and on the trajectory. Solvable examples are
-copied to ``solvable/`` and, when a vector store is provided, their
-embeddings are added so future synthesis rounds can dedup against them.
-
-Memory recording happens *after* verification finishes — see
-``run_verify`` (standalone) and ``run_synthesize`` (interleaved) for the
-single-pass record + persist step.
+Memory recording happens AFTER verification finishes — see ``run_verify``
+(standalone) and ``run_synthesize`` (interleaved) for the single-pass record
++ persist step.
 """
 
 from __future__ import annotations
@@ -45,9 +43,8 @@ import requests as http_requests
 
 from mm_agents.qwen35_vl import Qwen35VLAgent
 from mm_agents.utils.call_llm import call_llm_with_single_response
-from mm_agents.utils.utils import encode_screenshot
 
-from .prompts import CODE_VERIFIER_SYSTEM, ROUTER_DECISION_SYSTEM
+from .prompts import RELEVANCE_CHECK_SYSTEM
 from .shared_memory import SynthesisMemory, VectorDedupStore
 
 logger = logging.getLogger("desktopenv.synthesis.verifier")
@@ -121,146 +118,76 @@ def _build_task_context(example: Dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
-def _persist_step_artifacts(
-    result_dir: str,
-    timestamp: str,
-    screenshot_b64: str,
-    trajectory: List[Dict[str, Any]],
-    reward: float,
-) -> None:
-    """Write the post-step screenshot, trajectory, and result.txt under result_dir."""
-    screenshot_bytes = base64.b64decode(screenshot_b64)
-    with open(os.path.join(result_dir, f"step_0_{timestamp}.png"), "wb") as fp:
-        fp.write(screenshot_bytes)
-    with open(os.path.join(result_dir, "trajectory.json"), "w") as fp:
-        json.dump(trajectory, fp, indent=2)
-    with open(os.path.join(result_dir, "result.txt"), "w") as fp:
-        fp.write(f"{reward}\n")
+# Relevance-check responses are JSON objects. Keep the parser tolerant of
+# LLMs that wrap them in a ```json fence despite the prompt.
+_RELEVANCE_JSON_RE = re.compile(r'\{.*\}', re.DOTALL)
 
 
-def _extract_code_from_response(raw: str) -> str:
-    """Extract Python code from the ```python ... ``` fence in the LLM response."""
-    match = re.search(r'```python\s*\n(.*?)```', raw, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    match = re.search(r'```\s*\n(.*?)```', raw, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    logger.warning("No ```python fence found in code-stage response, using raw output")
-    return raw.strip()
-
-
-# Stage 1 router output is a JSON object. Keep the parser tolerant of LLMs
-# that wrap it in a ```json fence despite the prompt.
-_ROUTER_JSON_RE = re.compile(r'\{.*\}', re.DOTALL)
-
-
-def _decide_mode(
-    screenshot: bytes,
-    task_context: str,
+def _check_evaluator_relevance(
+    example: Dict[str, Any],
     llm_config: Dict[str, Any],
     runtime_logger: logging.Logger,
-) -> Tuple[str, str]:
-    """Stage 1: decide whether to execute via code or gui for this example.
+) -> Tuple[bool, str]:
+    """Pass 1: ask the LLM whether the evaluator captures the instruction's intent.
 
-    Returns ``(mode, reason)`` where ``mode`` is ``"code"`` or ``"gui"``.
-    Defaults to ``"code"`` on parse failure (the router prompt's stated
-    preference) and logs the failure so it can be debugged later.
+    Returns ``(relevant, reason)``. Defaults to ``relevant=True`` on parse
+    failure so a flaky LLM does not silently kill an entire batch — the
+    expensive VM step will still surface real bugs, and the parse failure is
+    logged for follow-up.
     """
+    instruction = example.get("instruction", "")
+    evaluator = example.get("evaluator") or {}
+    postconfig = evaluator.get("postconfig") or []
+    eval_expr = evaluator.get("eval", "")
+
+    user_text = (
+        f"## Instruction\n{instruction}\n\n"
+        f"## Evaluator postconfig\n"
+        f"{json.dumps(postconfig, indent=2) if postconfig else '[]'}\n\n"
+        f"## Evaluator eval\n{eval_expr or '(empty)'}\n\n"
+        "Decide whether this evaluator inspects the substantive state the "
+        "instruction names. Reply with the JSON object specified in the "
+        "system prompt and nothing else."
+    )
+
     messages = [
-        {"role": "system", "content": ROUTER_DECISION_SYSTEM},
-        {"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": encode_screenshot(screenshot)}},
-            {"type": "text", "text": task_context},
-        ]},
+        {"role": "system", "content": RELEVANCE_CHECK_SYSTEM},
+        {"role": "user", "content": user_text},
     ]
     raw = call_llm_with_single_response(
         messages=messages, llm_config=llm_config,
         max_tokens=400, temperature=0.0,
     )
 
-    match = _ROUTER_JSON_RE.search(raw)
+    match = _RELEVANCE_JSON_RE.search(raw or "")
     if not match:
         runtime_logger.warning(
-            f"router response lacks JSON object; defaulting to code. raw={raw!r}"
+            f"relevance response lacks JSON object; defaulting to relevant. raw={raw!r}"
         )
-        return "code", "router parse failed (no JSON object); defaulted to code"
+        return True, "relevance parse failed (no JSON object); defaulted to relevant"
 
     try:
         decision = json.loads(match.group(0))
     except json.JSONDecodeError as e:
         runtime_logger.warning(
-            f"router JSON invalid ({e}); defaulting to code. raw={raw!r}"
+            f"relevance JSON invalid ({e}); defaulting to relevant. raw={raw!r}"
         )
-        return "code", f"router JSON invalid ({e}); defaulted to code"
+        return True, f"relevance JSON invalid ({e}); defaulted to relevant"
 
-    mode = str(decision.get("mode", "")).strip().lower()
-    reason = str(decision.get("reason", "")).strip()
-    if mode not in {"code", "gui"}:
+    relevant_raw = decision.get("relevant")
+    if isinstance(relevant_raw, bool):
+        relevant = relevant_raw
+    elif isinstance(relevant_raw, str):
+        relevant = relevant_raw.strip().lower() in {"true", "yes", "1"}
+    else:
         runtime_logger.warning(
-            f"router returned unexpected mode {mode!r}; defaulting to code"
+            f"relevance returned non-bool 'relevant' field {relevant_raw!r}; "
+            f"defaulting to relevant"
         )
-        return "code", f"router returned mode={mode!r}; defaulted to code"
-    return mode, reason
+        return True, f"relevance returned 'relevant'={relevant_raw!r}; defaulted to relevant"
 
-
-def _run_code_action(
-    server_url: str,
-    vm_id: int,
-    screenshot: bytes,
-    task_context: str,
-    sleep_after_execution: float,
-    llm_config: Dict[str, Any],
-    result_dir: str,
-    mode_reason: str,
-) -> Dict[str, Any]:
-    """generate a python snippet and send it to /step.
-    The system prompt (``CODE_VERIFIER_SYSTEM``) forbids pyautogui /
-    xdotool / etc., so this stage produces only programmatic state changes.
-    """
-    proc = current_process().name
-    messages = [
-        {"role": "system", "content": CODE_VERIFIER_SYSTEM},
-        {"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": encode_screenshot(screenshot)}},
-            {"type": "text", "text": task_context},
-        ]},
-    ]
-    raw = call_llm_with_single_response(
-        messages=messages, llm_config=llm_config,
-        max_tokens=8000, temperature=0.7,
-    )
-    
-    breakpoint()
-    
-    code = _extract_code_from_response(raw)
-
-    ts = datetime.datetime.now().strftime("%Y%m%d@%H%M%S")
-    logger.info(f"[{proc}][code] generated: {code}")
-
-    step_data = _api_step(server_url, code, vm_id)
-    
-    breakpoint()
-    
-    time.sleep(sleep_after_execution)
-
-    time.sleep(5)
-    eval_data = _api_evaluate(server_url, vm_id)
-    
-    breakpoint()
-    
-    reward = eval_data["reward"]
-    logger.info(f"[{proc}][code] score={reward:.2f}")
-
-    trajectory = [{
-        "step": 0,
-        # "timestamp": ts,
-        "mode": "code",
-        "mode_reason": mode_reason,
-        "code": code,
-    }]
-    _persist_step_artifacts(result_dir, ts, step_data["screenshot"], trajectory, reward)
-    return {"mode": "code", "score": reward, "steps": 1, "mode_reason": mode_reason}
+    reason = str(decision.get("reason", "")).strip()
+    return relevant, reason
 
 
 def _run_gui_action(
@@ -273,7 +200,6 @@ def _run_gui_action(
     result_dir: str,
     screen_size: Tuple[int, int],
     runtime_logger: logging.Logger,
-    mode_reason: str,
     max_steps: int,
 ) -> Dict[str, Any]:
     """Drive Qwen35VLAgent for up to ``max_steps`` predict→/step iterations.
@@ -281,9 +207,7 @@ def _run_gui_action(
     Loop ends when the env signals done, the agent emits a terminate
     sentinel (``DONE``/``FAIL``), or the step cap is reached. The pattern
     mirrors ``lib_run_single.run_single_example`` but uses the OSGym HTTP
-    API instead of an in-process DesktopEnv. The agent emits pyautogui
-    commands only — no code execution, so the gui stage never overlaps
-    with ``_run_code_action``.
+    API instead of an in-process DesktopEnv.
     """
     proc = current_process().name
     agent = Qwen35VLAgent(
@@ -310,8 +234,6 @@ def _run_gui_action(
     while not done and step_idx < max_steps:
         try:
             observation, thought, action_code = agent.predict(task_context, obs)
-            breakpoint()
-            
         except Exception as e:
             runtime_logger.error(
                 f"[{proc}][gui] predict failed at step {step_idx + 1}: {e}"
@@ -330,7 +252,6 @@ def _run_gui_action(
         # interpret them client-side.
         try:
             step_data = _api_step(server_url, action_code, vm_id)
-            breakpoint()
         except Exception as e:
             runtime_logger.error(f"[{proc}][gui] /step failed: {e}")
             error = f"step: {e}"
@@ -384,7 +305,6 @@ def _run_gui_action(
     with open(os.path.join(result_dir, "trajectory.json"), "w") as fp:
         json.dump({
             "mode": "gui",
-            "mode_reason": mode_reason,
             "max_steps": max_steps,
             "steps": trajectory,
         }, fp, indent=2)
@@ -396,11 +316,27 @@ def _run_gui_action(
         "score": reward,
         "steps": step_idx,
         "done": done,
-        "mode_reason": mode_reason,
     }
     if error is not None:
         result["error"] = error
     return result
+
+
+def _persist_relevance_skip(
+    result_dir: str, reason: str
+) -> None:
+    """Write a minimal trajectory + result so the on-disk verify dir reflects
+    that this example was rejected before the VM stage.
+    """
+    os.makedirs(result_dir, exist_ok=True)
+    with open(os.path.join(result_dir, "trajectory.json"), "w") as fp:
+        json.dump({
+            "mode": "relevance_skip",
+            "relevance_reason": reason,
+            "steps": [],
+        }, fp, indent=2)
+    with open(os.path.join(result_dir, "result.txt"), "w") as fp:
+        fp.write("0.0\n")
 
 
 def run_verify_example(
@@ -413,54 +349,55 @@ def run_verify_example(
     runtime_logger: Optional[logging.Logger] = None,
     max_steps: int = 15,
 ) -> Dict[str, Any]:
-    """Two-stage verification of a single example.
+    """Two-pass verification of a single example.
 
-    Stage 1 (``_decide_mode``) returns ``"code"`` or ``"gui"`` plus a short
-    rationale, with strong preference for ``"code"``. Stage 2 dispatches:
-      - ``"code"`` → ``_run_code_action`` (one snippet, one /step).
-      - ``"gui"``  → ``_run_gui_action`` (multi-step Qwen35VLAgent loop, up
-        to ``max_steps`` predict→/step iterations or until done).
+    Pass 1 (``_check_evaluator_relevance``) decides whether the evaluator
+    actually inspects what the instruction asks for. An irrelevant example
+    is reported as not-solvable WITHOUT allocating a VM — this is the cheap
+    filter that catches the common synthesis failure where the eval is a
+    superficial proxy (file size, mere existence) for a content/state change.
 
-    Both stages reuse the screenshot returned by ``/reset`` so they see the
-    same starting state.
+    Pass 2 (``_run_gui_action``) only runs when relevance passes: allocate a
+    VM via ``/reset``, drive ``Qwen35VLAgent`` for up to ``max_steps``
+    predict→/step iterations, then call ``/evaluate``.
     """
     proc = current_process().name
     runtime_logger = runtime_logger or logger
-    task_context = _build_task_context(example)
 
+    relevant, relevance_reason = _check_evaluator_relevance(
+        example, llm_config, runtime_logger,
+    )
+    runtime_logger.info(
+        f"[{proc}][relevance] relevant={relevant} reason={relevance_reason!r}"
+    )
+
+    if not relevant:
+        _persist_relevance_skip(result_dir, relevance_reason)
+        return {
+            "id": example["id"],
+            "mode": "relevance_skip",
+            "score": 0.0,
+            "steps": 0,
+            "relevant": False,
+            "relevance_reason": relevance_reason,
+        }
+
+    task_context = _build_task_context(example)
     reset_data = _api_reset(server_url, example)
     vm_id = reset_data["vm_id"]
 
     try:
         screenshot = base64.b64decode(reset_data["screenshot"])
-        
-        breakpoint()
-
-        mode, mode_reason = _decide_mode(
-            screenshot, task_context, llm_config, runtime_logger,
+        res = _run_gui_action(
+            server_url, vm_id, screenshot, task_context,
+            sleep_after_execution, llm_config, result_dir,
+            screen_size=screen_size,
+            runtime_logger=runtime_logger,
+            max_steps=max_steps,
         )
-        
-        breakpoint()
-        
-        logger.info(f"[{proc}][router] mode={mode} reason={mode_reason!r}")
-
-        if mode == "gui":
-            res = _run_gui_action(
-                server_url, vm_id, screenshot, task_context,
-                sleep_after_execution, llm_config, result_dir,
-                screen_size=screen_size,
-                runtime_logger=runtime_logger,
-                mode_reason=mode_reason,
-                max_steps=max_steps,
-            )
-        else:
-            res = _run_code_action(
-                server_url, vm_id, screenshot, task_context,
-                sleep_after_execution, llm_config, result_dir,
-                mode_reason=mode_reason,
-            )
-
         res["id"] = example["id"]
+        res["relevant"] = True
+        res["relevance_reason"] = relevance_reason
         return res
 
     finally:
@@ -481,9 +418,7 @@ def worker(
 ):
     """Worker that pulls examples from the queue and runs one verification.
 
-    Code mode runs a single LLM-generated snippet; gui mode runs the
-    Qwen35VLAgent loop for up to ``max_steps`` steps until done. The
-    ``max_steps`` and ``screen_size`` parameters are explicit (not read
+    The ``max_steps`` and ``screen_size`` parameters are explicit (not read
     from ``args``) so the synthesize→verify callback path can pass them
     deliberately.
     """
@@ -565,6 +500,11 @@ def _process_verify_results(
     Does NOT write to ``SynthesisMemory`` — the caller is responsible for
     that, and must do so AFTER this function returns so verification status
     is finalized before the memory record is written.
+
+    ``relevance_skip`` results are persisted alongside the rest so callers
+    can see why an example was rejected without ever hitting the VM, but
+    they are NOT copied into ``solvable/`` and NOT added to the vector
+    store (a relevance failure means the task wasn't actually checked).
     """
     agg_path = os.path.join(args.output_dir, "verification_results.json")
     prior_results: List[Dict[str, Any]] = []
@@ -596,11 +536,18 @@ def _process_verify_results(
     by_id = {r["id"]: r for r in results}
     solvable_ids: List[str] = []
     unsolvable_ids: List[str] = []
+    irrelevant_ids: List[str] = []
     errored_ids: List[str] = []
     for eid, r in by_id.items():
         if "error" in r:
             errored_ids.append(eid)
             logger.info(f"ERRORED {eid}: {r['error']}")
+        elif r.get("mode") == "relevance_skip":
+            irrelevant_ids.append(eid)
+            logger.info(
+                f"IRRELEVANT {eid}: evaluator does not match instruction "
+                f"({r.get('relevance_reason', 'no reason')})"
+            )
         elif r.get("score", 0) > 0:
             solvable_ids.append(eid)
         else:
@@ -646,8 +593,10 @@ def _process_verify_results(
 
     logger.info(
         f"Batch verification: {len(solvable_ids)} solvable, "
-        f"{len(unsolvable_ids)} unsolvable, {len(errored_ids)} errored "
-        f"(will retry) out of {len(by_id)} total"
+        f"{len(unsolvable_ids)} unsolvable, "
+        f"{len(irrelevant_ids)} irrelevant (skipped), "
+        f"{len(errored_ids)} errored (will retry) "
+        f"out of {len(by_id)} total"
     )
     logger.info(f"Solvable examples saved to {solvable_dir}")
     logger.info(f"Aggregate results at {agg_path}")
@@ -862,14 +811,22 @@ def run_verify(
         max_steps=max_steps, screen_size=screen_size,
     )
 
-    # Memory record + persist AFTER verification
+    # Memory record + persist AFTER verification.
+    # A relevance_skip result still has an unambiguous solvable verdict
+    # (False — the example didn't even run on a VM), so we don't gate it
+    # on "error".
     if memory is not None:
         results_by_id = {r["id"]: r for r in results if r.get("id")}
         for ex in examples:
             r = results_by_id.get(ex["id"])
             if r is None:
                 continue
-            solvable = None if "error" in r else (r.get("score", 0) > 0)
+            if "error" in r:
+                solvable = None
+            elif r.get("mode") == "relevance_skip":
+                solvable = False
+            else:
+                solvable = r.get("score", 0) > 0
             memory.record(
                 example=ex,
                 domain=ex.get("_domain", "unknown"),
